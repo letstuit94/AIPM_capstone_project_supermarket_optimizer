@@ -69,7 +69,7 @@ STRICT RULES:
 RECEIPT_SCHEMA = {
     "type": "OBJECT",
     "properties": {
-        "store": {"type": "STRING", "enum": ["Rewe", "Edeka", "Aldi", "Netto", "Norma", "Lidl", "Penny", "unknown"]},
+        "store": {"type": "STRING", "enum": ["Rewe", "Edeka", "Aldi", "Netto", "Norma", "Lidl", "Penny", "Kaufland", "unknown"]},
         "scan_quality": {"type": "STRING", "enum": ["good", "medium", "poor"]},
         "items": {
             "type": "ARRAY",
