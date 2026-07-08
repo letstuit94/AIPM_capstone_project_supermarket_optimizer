@@ -1,45 +1,41 @@
 # ==========================
 # Web API
 # ==========================
-fastapi==0.116.1
-uvicorn[standard]==0.35.0
-python-multipart==0.0.20
+fastapi==0.139.0
+uvicorn==0.50.1
+python-multipart==0.0.32
 
 # ==========================
 # Environment variables
 # ==========================
-python-dotenv==1.1.1
+python-dotenv==1.2.2
 
 # ==========================
 # Supabase
 # ==========================
-supabase==2.18.1
-postgrest==1.1.1
-storage3==0.12.1
+supabase==2.31.0
+postgrest==2.31.0
+storage3==2.31.0
 
 # ==========================
 # Google Gemini
 # ==========================
-google-genai==1.29.0
+google-genai==2.10.0
 
 # ==========================
 # HTTP requests
 # ==========================
-requests==2.32.4
+requests==2.34.2
 httpx==0.28.1
 
 # ==========================
 # Data validation
 # ==========================
-pydantic==2.11.7
-pydantic-settings==2.7.1
+pydantic==2.13.4
+pydantic-settings==2.14.2
 
 # ==========================
-# Open Food Facts (next milestone)
+# OpenFoodFacts nutrition lookups (Epic 2) are done via direct REST
+# calls through `requests` (see backend/app/services/off_api.py), not
+# the openfoodfacts SDK — no separate package needed.
 # ==========================
-openfoodfacts==2.5.0
-
-# ==========================
-# Optional utilities
-# ==========================
-Pillow==11.3.0
