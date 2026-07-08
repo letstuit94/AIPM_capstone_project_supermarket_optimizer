@@ -7,11 +7,17 @@ from backend.app.api.recommendations import router as recommendations_router
 
 app = FastAPI(title="NutriWise API")
 
-# Dev-only: allow the local Vite frontend (port 5173) to call this API
-# from the browser. Tighten this to a real origin allowlist before deploy.
+# Dev-only: allow the local Vite frontend to call this API from the
+# browser. Vite falls back to 5174+ when 5173 is already taken, so a
+# small range is allowlisted rather than just the default port.
+# Tighten this to a real origin allowlist before deploy.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[
+        f"http://{host}:{port}"
+        for host in ("localhost", "127.0.0.1")
+        for port in range(5173, 5178)
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )

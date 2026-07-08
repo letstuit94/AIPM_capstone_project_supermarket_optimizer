@@ -163,11 +163,19 @@ export function ResultsStep({ profileId }: { profileId: string | null }) {
       ) : null}
 
       {snapshot ? (
-        <>
-          <div className="rounded-2xl bg-zinc-50 px-5 py-4 text-xs text-ink/60 ring-1 ring-black/5">
-            {snapshot.disclaimer}
-          </div>
+        <div className="rounded-2xl bg-zinc-50 px-5 py-4 text-xs text-ink/60 ring-1 ring-black/5">
+          {snapshot.disclaimer}
+        </div>
+      ) : null}
 
+      {/*
+        Story 7.2: the recommendation is the primary outcome and goes
+        above the detailed nutrition breakdown, not after it.
+      */}
+      {recommendation ? <NextCartCard rec={recommendation} /> : null}
+
+      {snapshot ? (
+        <>
           <Card className="space-y-1">
             <div className="flex items-center justify-between">
               <SectionLabel>
@@ -207,8 +215,6 @@ export function ResultsStep({ profileId }: { profileId: string | null }) {
           ) : null}
         </>
       ) : null}
-
-      {recommendation ? <NextCartCard rec={recommendation} /> : null}
     </section>
   );
 }

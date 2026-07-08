@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { AppShell, type StepId } from "@/components/AppShell";
+import { ConsentBanner } from "@/components/ConsentBanner";
 import { UploadStep } from "@/steps/UploadStep";
 import { ReviewStep } from "@/steps/ReviewStep";
 import { ProfileStep } from "@/steps/ProfileStep";
@@ -7,6 +8,7 @@ import { ResultsStep } from "@/steps/ResultsStep";
 
 const RECEIPT_KEY = "nutriwise.receiptId";
 const PROFILE_KEY = "nutriwise.profileId";
+const CONSENT_KEY = "nutriwise.consent";
 
 function App() {
   const [step, setStep] = useState<StepId>("upload");
@@ -16,6 +18,14 @@ function App() {
   const [profileId, setProfileId] = useState<string | null>(() =>
     localStorage.getItem(PROFILE_KEY),
   );
+  const [consented, setConsented] = useState<boolean>(
+    () => localStorage.getItem(CONSENT_KEY) === "true",
+  );
+
+  function handleConsent() {
+    localStorage.setItem(CONSENT_KEY, "true");
+    setConsented(true);
+  }
 
   function handleUploaded(id: string) {
     setReceiptId(id);
@@ -31,7 +41,13 @@ function App() {
 
   return (
     <AppShell step={step} onNavigate={setStep}>
-      {step === "upload" ? <UploadStep onUploaded={handleUploaded} /> : null}
+      {step === "upload" ? (
+        consented ? (
+          <UploadStep onUploaded={handleUploaded} />
+        ) : (
+          <ConsentBanner onAccept={handleConsent} />
+        )
+      ) : null}
 
       {step === "review" ? (
         receiptId ? (
