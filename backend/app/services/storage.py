@@ -15,3 +15,9 @@ def upload_receipt_bytes(file_bytes, filename, content_type):
     )
 
     return storage_path
+
+
+def delete_receipt_bytes(storage_path: str):
+    """Remove an uploaded receipt image (GDPR: user-initiated erasure)."""
+
+    supabase.storage.from_("receipts").remove([storage_path])

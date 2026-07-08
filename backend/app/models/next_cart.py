@@ -7,6 +7,15 @@ from backend.app.models.snapshot import ConfidenceLevel
 from backend.app.nutrition_model import DISCLAIMER
 
 
+class Recipe(BaseModel):
+    """One recipe suggestion matched to a Next Cart item (MVP summary
+    point 5, Should Have)."""
+
+    title: str
+    description: str
+    prep_minutes: Optional[int] = None
+
+
 class ActionType(str, Enum):
     ADD = "add"
     REPLACE = "replace"
@@ -50,5 +59,7 @@ class NextCartRecommendation(BaseModel):
     explanation: Optional[str] = None  # personalized "why this fits you" (Story 6.1)
     confidence: ConfidenceLevel
     evaluated_candidates: List[EvaluatedCandidate] = Field(default_factory=list)
+    # Up to 3 recipes matched to `item` (MVP summary point 5, Should Have).
+    recipes: List[Recipe] = Field(default_factory=list)
     # Story 6.3: always present, never optional to include in a response.
     disclaimer: str = DISCLAIMER

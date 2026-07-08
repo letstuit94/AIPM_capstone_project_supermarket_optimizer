@@ -35,6 +35,7 @@ from backend.app.models.next_cart import (
 )
 from backend.app.services.exclusion_filter import ExclusionCandidate, check_candidate
 from backend.app.services.explainer import generate_explanation
+from backend.app.services.recipe_suggester import suggest_recipes
 
 _RECOMMENDATIONS_PATH = Path(__file__).resolve().parents[1] / "data" / "recommendations.json"
 
@@ -42,7 +43,20 @@ ProfileLike = Union[Profile, ProfileCreate]
 
 
 def _load_recommendations() -> dict:
-    return json.loads(_RECOMMENDATIONS_PATH.read_text(encoding="utf-8"))
+    """
+    Bug fix: this used to have no error handling, and since it runs at
+    import time (below), a missing/corrupted recommendations.json would
+    crash the ENTIRE app at startup — receipt upload, profiles, everything
+    — not just Next Cart. Degrade to "no candidates for any gap" instead;
+    recommend_next_cart already has a defined NO_SUITABLE_CANDIDATE path
+    for exactly that case.
+    """
+
+    try:
+        return json.loads(_RECOMMENDATIONS_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"[recommender] could not load recommendations.json, Next Cart disabled: {e}")
+        return {}
 
 
 # Loaded once at import time: the table is static data, not a live resource.
@@ -120,6 +134,7 @@ def recommend_next_cart(
                     explanation=generate_explanation(gap, candidate, profile),
                     confidence=confidence,
                     evaluated_candidates=evaluated,
+                    recipes=suggest_recipes(candidate["item"]),
                 )
 
     # Every candidate for every gap conflicted with the profile.

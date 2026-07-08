@@ -83,11 +83,11 @@ def _offline():
 def _live_db():
     from backend.app.db.supabase import get_profile
     from backend.app.models.profile import Profile
-    from backend.app.services.nutrition_snapshot import build_snapshot_from_db
+    from backend.app.services.nutrition_snapshot import build_snapshot_from_all_receipts
     from backend.app.services.recommender import default_profile
 
     profile_id = sys.argv[2] if len(sys.argv) > 2 else None
-    snapshot = build_snapshot_from_db()
+    snapshot = build_snapshot_from_all_receipts()
 
     profile = Profile.model_validate(get_profile(profile_id)) if profile_id else default_profile()
     rec = recommend_next_cart(snapshot.gaps, profile, snapshot.confidence)

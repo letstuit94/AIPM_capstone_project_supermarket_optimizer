@@ -9,55 +9,15 @@ case the caller falls back to category-based nutrition (Task 2.3).
 Uses stdlib difflib for similarity, so there is no extra dependency.
 """
 
-import re
-from difflib import SequenceMatcher
 from typing import Optional
 
 from backend.app.models.nutrition import MatchedProduct, MatchType, NutritionValues
 from backend.app.services import off_api
+from backend.app.services.text_similarity import token_similarity
 
 # Similarity thresholds on a 0..1 scale.
 EXACT_THRESHOLD = 0.90   # >= this -> treat as an exact match
 FUZZY_THRESHOLD = 0.60   # >= this (and < exact) -> fuzzy match; below -> no match
-
-# Score for a token that is contained in the other name (e.g. "joghurt"
-# inside "naturjoghurt"): high, but capped below EXACT so a containment
-# match is honestly labelled "fuzzy" rather than "exact".
-_CONTAINMENT_SCORE = 0.85
-
-_TOKEN_RE = re.compile(r"[a-zäöüß0-9]+")
-
-
-def _tokens(s: str) -> list:
-    return [t for t in _TOKEN_RE.findall(s.lower()) if len(t) >= 3]
-
-
-def _similarity(query: str, candidate: str) -> float:
-    """
-    Similarity between a query and a candidate product name (0..1).
-
-    Takes the best of a full-string ratio and a token-level score, so a
-    short query still scores high against a long, verbose OFF product
-    name ("Gouda" vs "Queso Gouda", "Naturjoghurt" vs "Joghurt mild ...").
-    """
-
-    q = (query or "").strip().lower()
-    c = (candidate or "").strip().lower()
-    if not q or not c:
-        return 0.0
-
-    best = SequenceMatcher(None, q, c).ratio()
-
-    q_tokens = _tokens(q)
-    c_tokens = _tokens(c)
-    for qt in q_tokens:
-        for ct in c_tokens:
-            if len(qt) >= 4 and (qt in ct or ct in qt):
-                best = max(best, _CONTAINMENT_SCORE)
-            else:
-                best = max(best, SequenceMatcher(None, qt, ct).ratio())
-
-    return best
 
 
 def _has_usable_nutrition(nutrition: NutritionValues) -> bool:
@@ -101,7 +61,7 @@ def match_product(
 
     scored = []
     for product in candidates:
-        score = _similarity(name, off_api.product_display_name(product))
+        score = token_similarity(name, off_api.product_display_name(product))
         if score < FUZZY_THRESHOLD:
             continue
         nutrition = off_api.extract_nutrition(product)

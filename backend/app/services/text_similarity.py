@@ -1,0 +1,55 @@
+"""
+Shared fuzzy text-similarity helper.
+
+Extracted from Task 2.2's product matcher (originally a private
+`_similarity` in matcher.py) so Task 8.6/8.8's receipt comparison uses
+the identical, already-proven logic instead of a naively weaker one.
+
+A raw whole-string SequenceMatcher ratio badly under-scores a short
+query against a longer/differently-worded name — "Linsen" vs "Rote
+Linsen" scores ~0.71, "Eier" vs "Bio Eier" ~0.67, both well below any
+reasonable match threshold, even though a human would call these the
+same product. Taking the best of the whole-string ratio and a
+token-level containment score fixes that.
+"""
+
+import re
+from difflib import SequenceMatcher
+
+# Score for a token that is contained in the other name (e.g. "joghurt"
+# inside "naturjoghurt"): high, but capped below a typical "exact match"
+# threshold so a containment match is honestly labelled "fuzzy".
+CONTAINMENT_SCORE = 0.85
+
+_TOKEN_RE = re.compile(r"[a-zäöüß0-9]+")
+
+
+def _tokens(s: str) -> list:
+    return [t for t in _TOKEN_RE.findall(s.lower()) if len(t) >= 3]
+
+
+def token_similarity(query: str, candidate: str) -> float:
+    """
+    Similarity between two names (0..1). Takes the best of a full-string
+    ratio and a token-level score, so a short query still scores high
+    against a longer, differently-worded name ("Gouda" vs "Queso Gouda",
+    "Rote Linsen" vs "Linsen").
+    """
+
+    q = (query or "").strip().lower()
+    c = (candidate or "").strip().lower()
+    if not q or not c:
+        return 0.0
+
+    best = SequenceMatcher(None, q, c).ratio()
+
+    q_tokens = _tokens(q)
+    c_tokens = _tokens(c)
+    for qt in q_tokens:
+        for ct in c_tokens:
+            if len(qt) >= 4 and (qt in ct or ct in qt):
+                best = max(best, CONTAINMENT_SCORE)
+            else:
+                best = max(best, SequenceMatcher(None, qt, ct).ratio())
+
+    return best

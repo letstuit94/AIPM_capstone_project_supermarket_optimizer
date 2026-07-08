@@ -1,8 +1,11 @@
 from typing import Optional
+from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 
-from backend.app.db.supabase import get_profile
+from backend.app.services.session import get_session_id
+from backend.app.analytics.events import log_event
+from backend.app.db.supabase import get_profile, create_recommendation_row
 from backend.app.models.profile import Profile
 from backend.app.services.nutrition_snapshot import build_snapshot_from_db
 from backend.app.services.recommender import recommend_next_cart, default_profile
@@ -11,17 +14,24 @@ router = APIRouter()
 
 
 @router.get("/next-cart")
-def next_cart(profile_id: Optional[str] = None):
+def next_cart(profile_id: Optional[str] = None, session_id: str = Depends(get_session_id)):
     """
     The single Next Cart recommendation (Epic 5), grounded in the
-    aggregated gaps from Epic 4 across ALL saved receipts, and constrained
-    by the given profile's dietary pattern + exclusions (Epic 3).
+    aggregated gaps from Epic 4 across this session's saved receipts
+    (scoped per Story 8.3), and constrained by the given profile's
+    dietary pattern + exclusions (Epic 3).
 
     profile_id is optional: without one, a neutral no-exclusions profile
     is used so the endpoint still works before onboarding is complete.
+
+    The computed recommendation is persisted (Task 8.5) so feedback
+    (Task 8.2) has a stable `recommendation_id` to reference — otherwise
+    "would you buy this?" would have nothing to point back to, since
+    Next Cart is computed fresh on every call rather than stored ahead
+    of time.
     """
 
-    snapshot = build_snapshot_from_db()
+    snapshot = build_snapshot_from_db(session_id)
     if snapshot.items_analyzed == 0:
         raise HTTPException(
             status_code=409,
@@ -42,4 +52,14 @@ def next_cart(profile_id: Optional[str] = None):
         profile=profile,
         confidence=snapshot.confidence,
     )
-    return recommendation.model_dump()
+
+    recommendation_id = str(uuid4())
+    payload = recommendation.model_dump(mode="json")
+    create_recommendation_row(recommendation_id, session_id, payload)
+    log_event(
+        "recommendation_viewed",
+        {"recommendation_id": recommendation_id, "status": payload["status"], "action_type": payload["action_type"]},
+        session_id,
+    )
+
+    return {"recommendation_id": recommendation_id, "session_id": session_id, **payload}
