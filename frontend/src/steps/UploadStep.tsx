@@ -137,8 +137,20 @@ export function UploadStep({
       )}
 
       {error ? (
-        <div className="rounded-2xl bg-red-50 px-5 py-4 text-sm text-red-700 ring-1 ring-red-200">
-          {error}
+        <div className="space-y-3 rounded-2xl bg-red-50 px-5 py-4 text-sm text-red-700 ring-1 ring-red-200">
+          <p>{error}</p>
+          {mode === "image" ? (
+            <button
+              type="button"
+              onClick={() => {
+                setMode("text");
+                setError(null);
+              }}
+              className="rounded-full bg-red-100 px-3 py-1.5 text-xs font-medium tracking-tight text-red-800 hover:bg-red-200"
+            >
+              Paste the receipt text instead →
+            </button>
+          ) : null}
         </div>
       ) : null}
 

@@ -5,6 +5,7 @@ import { UploadStep } from "@/steps/UploadStep";
 import { ReviewStep } from "@/steps/ReviewStep";
 import { ProfileStep } from "@/steps/ProfileStep";
 import { ResultsStep } from "@/steps/ResultsStep";
+import { deleteReceipt, deleteProfile, ApiError } from "@/lib/api";
 
 const RECEIPT_KEY = "nutriwise.receiptId";
 const PROFILE_KEY = "nutriwise.profileId";
@@ -39,8 +40,40 @@ function App() {
     setStep("results");
   }
 
+  async function handleDeleteData() {
+    if (!receiptId && !profileId) return;
+    if (!window.confirm("Delete the receipt and profile stored for this session? This can't be undone.")) {
+      return;
+    }
+
+    try {
+      await Promise.all([
+        receiptId ? deleteReceipt(receiptId).catch((e) => {
+          if (!(e instanceof ApiError && e.status === 404)) throw e;
+        }) : null,
+        profileId ? deleteProfile(profileId).catch((e) => {
+          if (!(e instanceof ApiError && e.status === 404)) throw e;
+        }) : null,
+      ]);
+    } catch (e) {
+      window.alert(e instanceof ApiError ? e.message : "Could not delete your data.");
+      return;
+    }
+
+    localStorage.removeItem(RECEIPT_KEY);
+    localStorage.removeItem(PROFILE_KEY);
+    setReceiptId(null);
+    setProfileId(null);
+    setStep("upload");
+  }
+
   return (
-    <AppShell step={step} onNavigate={setStep}>
+    <AppShell
+      step={step}
+      onNavigate={setStep}
+      onDeleteData={handleDeleteData}
+      canDeleteData={Boolean(receiptId || profileId)}
+    >
       {step === "upload" ? (
         consented ? (
           <UploadStep onUploaded={handleUploaded} />

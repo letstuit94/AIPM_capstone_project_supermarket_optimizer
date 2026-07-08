@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
-import { SectionLabel, Card } from "@/components/AppShell";
-import { getNutritionSnapshot, getNextCart, ApiError } from "@/lib/api";
-import type { DimensionSnapshot, NextCartRecommendation, NutritionSnapshot } from "@/types/api";
+import { SectionLabel, Card, inputCls } from "@/components/AppShell";
+import { cn } from "@/lib/utils";
+import { getNutritionSnapshot, getNextCart, submitFeedback, ApiError } from "@/lib/api";
+import type {
+  DimensionSnapshot,
+  FeedbackResponseValue,
+  NextCartRecommendation,
+  NutritionSnapshot,
+} from "@/types/api";
 
 const STATUS_TONE: Record<DimensionSnapshot["status"], string> = {
   low: "bg-amber-500",
@@ -102,6 +108,99 @@ function NextCartCard({ rec }: { rec: NextCartRecommendation }) {
           </ul>
         </details>
       ) : null}
+
+      {rec.recipes.length > 0 ? (
+        <div className="space-y-3 border-t border-black/5 pt-4">
+          <SectionLabel>Recipes with {rec.item}</SectionLabel>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {rec.recipes.map((recipe, i) => (
+              <div key={i} className="rounded-xl bg-zinc-50 p-3 ring-1 ring-black/5">
+                <div className="flex items-baseline justify-between gap-2">
+                  <p className="text-sm font-medium tracking-tight">{recipe.title}</p>
+                  {recipe.prep_minutes != null ? (
+                    <span className="shrink-0 text-[10px] uppercase tracking-widest text-ink/40">
+                      {recipe.prep_minutes}m
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-1 text-xs text-ink/60">{recipe.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+const FEEDBACK_OPTIONS: readonly FeedbackResponseValue[] = ["yes", "maybe", "no"];
+
+function FeedbackWidget({ recommendationId }: { recommendationId: string }) {
+  const [choice, setChoice] = useState<FeedbackResponseValue | null>(null);
+  const [comment, setComment] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(response: FeedbackResponseValue) {
+    setChoice(response);
+    setSubmitting(true);
+    setError(null);
+    try {
+      await submitFeedback({
+        recommendation_id: recommendationId,
+        response,
+        comment: comment.trim() || undefined,
+      });
+      setSubmitted(true);
+    } catch (e) {
+      // Bug fix: `choice` used to stay set on failure, so the clicked
+      // button kept looking "selected" even though nothing was saved.
+      setChoice(null);
+      setError(e instanceof ApiError ? e.message : "Could not save your feedback.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (submitted) {
+    return (
+      <Card className="space-y-1">
+        <SectionLabel>Feedback</SectionLabel>
+        <p className="text-sm text-ink/70">Thanks — that's saved.</p>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="space-y-4">
+      <SectionLabel>Would you consider buying this next time?</SectionLabel>
+      <div className="flex gap-2">
+        {FEEDBACK_OPTIONS.map((opt) => (
+          <button
+            type="button"
+            key={opt}
+            disabled={submitting}
+            onClick={() => submit(opt)}
+            className={cn(
+              "flex-1 rounded-xl py-2.5 text-sm font-medium tracking-tight capitalize ring-1 transition-colors disabled:opacity-40",
+              choice === opt
+                ? "bg-ink text-canvas ring-ink"
+                : "bg-zinc-50 text-ink/60 ring-black/5 hover:text-ink",
+            )}
+          >
+            {opt}
+          </button>
+        ))}
+      </div>
+      <input
+        className={inputCls}
+        placeholder="Optional comment"
+        value={comment}
+        onChange={(e) => setComment(e.target.value)}
+        disabled={submitting}
+      />
+      {error ? <p className="text-xs text-red-600">{error}</p> : null}
     </Card>
   );
 }
@@ -173,6 +272,13 @@ export function ResultsStep({ profileId }: { profileId: string | null }) {
         above the detailed nutrition breakdown, not after it.
       */}
       {recommendation ? <NextCartCard rec={recommendation} /> : null}
+
+      {recommendation?.status === "recommended" ? (
+        <FeedbackWidget
+          key={recommendation.recommendation_id}
+          recommendationId={recommendation.recommendation_id}
+        />
+      ) : null}
 
       {snapshot ? (
         <>
