@@ -1,0 +1,181 @@
+{
+  "Rote Linsen": [
+    {
+      "title": "Red Lentil Soup",
+      "description": "Simmer red lentils with onion, carrot, cumin, and vegetable stock until soft; blend partially for a creamy texture.",
+      "prep_minutes": 25
+    },
+    {
+      "title": "Lentil & Spinach Curry",
+      "description": "Cook lentils with tomatoes, garlic, and curry powder in coconut milk; stir in spinach at the end.",
+      "prep_minutes": 30
+    },
+    {
+      "title": "Warm Lentil Salad",
+      "description": "Toss cooked lentils with cucumber, feta, lemon juice, and olive oil; serve warm or at room temperature.",
+      "prep_minutes": 15
+    }
+  ],
+  "Kichererbsen": [
+    {
+      "title": "Chickpea & Tomato Stew",
+      "description": "Simmer chickpeas with canned tomatoes, garlic, and smoked paprika until thick.",
+      "prep_minutes": 25
+    },
+    {
+      "title": "Roasted Chickpea Snack",
+      "description": "Toss chickpeas with olive oil and spices, roast until crisp.",
+      "prep_minutes": 30
+    },
+    {
+      "title": "Chickpea Salad Bowl",
+      "description": "Combine chickpeas with cucumber, red onion, parsley, and a lemon-tahini dressing.",
+      "prep_minutes": 10
+    }
+  ],
+  "Vollkornhaferflocken": [
+    {
+      "title": "Overnight Oats",
+      "description": "Mix whole oats with milk or yogurt and a topping of your choice; refrigerate overnight.",
+      "prep_minutes": 5
+    },
+    {
+      "title": "Savory Oat Porridge",
+      "description": "Cook oats in stock instead of water, top with a fried egg and greens.",
+      "prep_minutes": 15
+    },
+    {
+      "title": "Baked Oat Bars",
+      "description": "Combine oats, mashed banana, and nuts; bake until firm for a portable snack.",
+      "prep_minutes": 30
+    }
+  ],
+  "Vollkornbrot": [
+    {
+      "title": "Open-Faced Egg Sandwich",
+      "description": "Top whole-grain bread with a soft-boiled egg, avocado, and chili flakes.",
+      "prep_minutes": 10
+    },
+    {
+      "title": "Tomato & Cheese Toast",
+      "description": "Layer whole-grain bread with fresh tomato, mozzarella, and basil; toast until melted.",
+      "prep_minutes": 10
+    }
+  ],
+  "Griechischer Joghurt": [
+    {
+      "title": "Greek Yogurt Parfait",
+      "description": "Layer Greek yogurt with berries and a handful of nuts or granola.",
+      "prep_minutes": 5
+    },
+    {
+      "title": "Yogurt-Marinated Chicken",
+      "description": "Marinate chicken in Greek yogurt, garlic, and lemon before grilling or baking.",
+      "prep_minutes": 20
+    },
+    {
+      "title": "Savory Yogurt Dip",
+      "description": "Stir Greek yogurt with cucumber, garlic, and dill for a quick dip or sauce.",
+      "prep_minutes": 10
+    }
+  ],
+  "Tofu": [
+    {
+      "title": "Pan-Fried Tofu Stir-Fry",
+      "description": "Pan-fry cubed tofu until golden, then toss with vegetables and soy sauce.",
+      "prep_minutes": 20
+    },
+    {
+      "title": "Tofu Scramble",
+      "description": "Crumble tofu into a pan with turmeric, onion, and peppers for an egg-free scramble.",
+      "prep_minutes": 15
+    },
+    {
+      "title": "Baked Marinated Tofu",
+      "description": "Marinate tofu slices and bake until firm and slightly caramelized.",
+      "prep_minutes": 30
+    }
+  ],
+  "Eier": [
+    {
+      "title": "Vegetable Omelette",
+      "description": "Whisk eggs and cook with sautéed vegetables of your choice.",
+      "prep_minutes": 10
+    },
+    {
+      "title": "Soft-Boiled Eggs with Toast",
+      "description": "Boil eggs to a soft yolk, serve with toasted bread strips.",
+      "prep_minutes": 8
+    },
+    {
+      "title": "Baked Egg Muffins",
+      "description": "Whisk eggs with vegetables and cheese, bake in a muffin tin for grab-and-go portions.",
+      "prep_minutes": 25
+    }
+  ],
+  "Ungesüßter Tee oder Wasser": [
+    {
+      "title": "Cucumber Mint Infused Water",
+      "description": "Add cucumber slices and fresh mint to a jug of water; chill before serving.",
+      "prep_minutes": 5
+    },
+    {
+      "title": "Unsweetened Iced Tea",
+      "description": "Brew tea, cool, and serve over ice with a slice of lemon.",
+      "prep_minutes": 10
+    }
+  ],
+  "Naturjoghurt": [
+    {
+      "title": "Plain Yogurt with Honey Alternative",
+      "description": "Top plain yogurt with fresh fruit and a small drizzle of your preferred sweetener.",
+      "prep_minutes": 5
+    },
+    {
+      "title": "Yogurt Herb Sauce",
+      "description": "Mix plain yogurt with chopped herbs, garlic, and lemon as a sauce for grilled dishes.",
+      "prep_minutes": 10
+    }
+  ],
+  "Ungesalzene Nüsse": [
+    {
+      "title": "Homemade Trail Mix",
+      "description": "Combine unsalted nuts with dried fruit and a few dark chocolate chips.",
+      "prep_minutes": 5
+    },
+    {
+      "title": "Nut-Crusted Chicken or Tofu",
+      "description": "Crush unsalted nuts and use as a crust for baked chicken or tofu.",
+      "prep_minutes": 25
+    }
+  ],
+  "Frisches Gemüse": [
+    {
+      "title": "Sheet-Pan Roasted Vegetables",
+      "description": "Toss chopped vegetables with olive oil and herbs, roast until tender.",
+      "prep_minutes": 30
+    },
+    {
+      "title": "Quick Vegetable Stir-Fry",
+      "description": "Stir-fry a mix of fresh vegetables with garlic and soy sauce.",
+      "prep_minutes": 15
+    },
+    {
+      "title": "Raw Vegetable Salad",
+      "description": "Combine fresh vegetables with a simple vinaigrette for a crisp side dish.",
+      "prep_minutes": 10
+    }
+  ],
+  "Vollkornreis oder Vollkornnudeln": [
+    {
+      "title": "Whole-Grain Rice Bowl",
+      "description": "Top whole-grain rice with roasted vegetables, a protein of choice, and a simple sauce.",
+      "prep_minutes": 25
+    },
+    {
+      "title": "Whole-Grain Pasta Primavera",
+      "description": "Toss whole-grain pasta with sautéed seasonal vegetables and olive oil.",
+      "prep_minutes": 20
+    }
+  ]
+}

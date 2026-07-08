@@ -13,10 +13,14 @@ const NAV: { id: StepId; label: string }[] = [
 export function AppShell({
   step,
   onNavigate,
+  onDeleteData,
+  canDeleteData,
   children,
 }: {
   step: StepId;
   onNavigate: (step: StepId) => void;
+  onDeleteData?: () => void;
+  canDeleteData?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -47,8 +51,18 @@ export function AppShell({
         </div>
       </nav>
       <main className="mx-auto max-w-3xl">{children}</main>
-      <footer className="mx-auto max-w-3xl px-6 py-12 text-[11px] uppercase tracking-widest text-ink/35">
-        NutriWise · estimated from your shopping habits, not actual intake
+      <footer className="mx-auto max-w-3xl space-y-3 px-6 py-12 text-[11px] uppercase tracking-widest text-ink/35">
+        <p>NutriWise · estimated from your shopping habits, not actual intake</p>
+        {onDeleteData ? (
+          <button
+            type="button"
+            onClick={onDeleteData}
+            disabled={!canDeleteData}
+            className="normal-case tracking-normal text-ink/50 underline decoration-ink/20 underline-offset-2 hover:text-ink disabled:cursor-not-allowed disabled:text-ink/25 disabled:no-underline"
+          >
+            Delete my data
+          </button>
+        ) : null}
       </footer>
     </div>
   );

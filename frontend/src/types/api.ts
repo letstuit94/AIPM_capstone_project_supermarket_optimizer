@@ -152,7 +152,15 @@ export interface EvaluatedCandidate {
   reason?: string | null;
 }
 
+export interface Recipe {
+  title: string;
+  description: string;
+  prep_minutes?: number | null;
+}
+
 export interface NextCartRecommendation {
+  recommendation_id: string;
+  session_id: string;
   status: RecommendationStatus;
   action_type: ActionType;
   item?: string | null;
@@ -162,6 +170,22 @@ export interface NextCartRecommendation {
   reasoning: string[];
   confidence: ConfidenceLevel;
   evaluated_candidates: EvaluatedCandidate[];
+  recipes: Recipe[];
+}
+
+// --- Epic 8: Feedback ----------------------------------------------------
+
+export type FeedbackResponseValue = "yes" | "no" | "maybe";
+
+export interface FeedbackCreate {
+  recommendation_id: string;
+  response: FeedbackResponseValue;
+  comment?: string | null;
+}
+
+export interface Feedback extends FeedbackCreate {
+  id: string;
+  session_id: string;
 }
 
 export interface ApiErrorBody {

@@ -13,8 +13,9 @@ Pipeline per source: items -> Epic 2 mapping -> profile (4.2) -> gaps
 (4.3) -> dimensions + confidence + disclaimer.
 """
 
+import time
 from pathlib import Path
-from typing import List
+from typing import Dict, List, Tuple
 
 from backend.app.models.snapshot import NutritionSnapshot
 from backend.app.models.nutrition import MatchedProduct
@@ -24,6 +25,24 @@ from backend.app.services.gap_detector import detect_gaps
 from backend.app import nutrition_model as nm
 
 _IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
+
+# Bug fix: /nutrition/snapshot and /next-cart each independently called
+# build_snapshot_from_db for the same session, redoing the same 2 DB
+# round-trips + OFF-mapping pipeline every time — the frontend's
+# ResultsStep.tsx fires both in parallel on every page load. A short-TTL
+# cache collapses that pair (and rapid Refresh clicks) into one
+# computation without risking meaningfully stale data — nothing in this
+# app updates a session's receipts fast enough for 5 seconds to matter.
+_SNAPSHOT_CACHE_TTL_SECONDS = 5.0
+_snapshot_cache: Dict[str, Tuple[float, NutritionSnapshot]] = {}
+
+
+def invalidate_snapshot_cache(session_id: str) -> None:
+    """Call after any write that changes a session's receipts (new
+    upload, item correction) so the next snapshot reflects it immediately
+    instead of waiting out the cache TTL."""
+
+    _snapshot_cache.pop(session_id, None)
 
 
 def assemble_snapshot(
@@ -56,10 +75,52 @@ def build_snapshot(items: List[dict], receipts_analyzed: int) -> NutritionSnapsh
     return assemble_snapshot(items, matched, receipts_analyzed)
 
 
-def build_snapshot_from_db() -> NutritionSnapshot:
-    """Aggregate every stored receipt item across all receipts."""
+def build_snapshot_from_db(session_id: str) -> NutritionSnapshot:
+    """
+    Aggregate every receipt item from THIS session's receipts only
+    (Story 8.3). Previously this aggregated every receipt in the whole
+    database regardless of who uploaded it — fine with a single tester,
+    silently wrong the moment a second person uses the app at the same
+    time, since their baskets would blend into one shared snapshot.
+    """
+
+    cached = _snapshot_cache.get(session_id)
+    if cached is not None and (time.time() - cached[0]) < _SNAPSHOT_CACHE_TTL_SECONDS:
+        return cached[1]
 
     # Imported here so the offline/folder paths don't require DB config.
+    from backend.app.db.supabase import get_receipt_items_by_session
+    from backend.app.analytics.events import log_event
+
+    items = get_receipt_items_by_session(session_id)
+    receipts = len({it.get("receipt_id") for it in items if it.get("receipt_id")})
+
+    # Bug fix (Story 9.1): match_rate was only ever logged by
+    # /receipts/{id}/mapping, an endpoint the frontend never calls — so
+    # in real usage this "critical metric" (per Epic 2's own risk
+    # analysis) never fired. This is the actual pipeline every user goes
+    # through (both /nutrition/snapshot and /next-cart route through
+    # here), so log it here instead of via build_snapshot(), which is
+    # also used by dev-only/offline paths that have no session to log
+    # against. map_items() runs once; matched_products feeds the
+    # snapshot and match_quality feeds the event, no redundant OFF calls.
+    mapping = map_items(items)
+    log_event("match_rate", mapping.match_quality.model_dump(), session_id)
+    snapshot = assemble_snapshot(items, mapping.matched_products, receipts)
+
+    _snapshot_cache[session_id] = (time.time(), snapshot)
+    return snapshot
+
+
+def build_snapshot_from_all_receipts() -> NutritionSnapshot:
+    """
+    Dev/debug only: aggregate every receipt in the database regardless of
+    session. NOT used by the API — real requests always go through
+    `build_snapshot_from_db(session_id)` so one session's data doesn't
+    bleed into another's. Kept for manual scripts that want to sanity
+    check against everything that's been uploaded so far.
+    """
+
     from backend.app.db.supabase import get_all_receipt_items
 
     items = get_all_receipt_items()

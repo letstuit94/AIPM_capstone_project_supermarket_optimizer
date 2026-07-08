@@ -23,7 +23,7 @@ from backend.app.models.nutrition import MatchedProduct
 from backend.app.services.nutrition_snapshot import (
     assemble_snapshot,
     build_snapshot_from_folder,
-    build_snapshot_from_db,
+    build_snapshot_from_all_receipts,
 )
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
@@ -44,7 +44,7 @@ def main():
         folder = args[args.index("--folder") + 1]
         snap = build_snapshot_from_folder(folder)
     elif "--db" in args:
-        snap = build_snapshot_from_db()
+        snap = build_snapshot_from_all_receipts()
     else:
         snap = _offline_snapshot()
 

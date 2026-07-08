@@ -19,7 +19,8 @@ export function ConsentBanner({ onAccept }: { onAccept: () => void }) {
         <ul className="space-y-2 text-sm text-ink/70">
           <li>· Every result is estimated from your shopping habits, not actual intake.</li>
           <li>· Your receipt and profile answers are processed only to generate this recommendation.</li>
-          <li>· You can stop at any time; nothing is shared with third parties.</li>
+          <li>· You can permanently delete your receipt and profile at any time via "Delete my data" in the footer.</li>
+          <li>· Nothing is shared with third parties.</li>
         </ul>
         <PrimaryButton onClick={onAccept}>I understand, continue</PrimaryButton>
       </Card>
