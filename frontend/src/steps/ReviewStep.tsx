@@ -133,7 +133,7 @@ export function ReviewStep({
   return (
     <section className="space-y-8 px-6 pb-16">
       <header className="space-y-2">
-        <SectionLabel>Step 2 · Review</SectionLabel>
+        <SectionLabel>Step 4 · Review</SectionLabel>
         <h1 className="text-balance text-4xl font-medium leading-none tracking-tight">
           Check what we found.
         </h1>

@@ -45,9 +45,10 @@ def _insert_tolerant(table: str, record: dict):
     return supabase.table(table).insert(remaining).execute()
 
 
-def create_receipt_row(receipt_id, file_name, file_type, storage_path, session_id=None):
+def create_receipt_row(receipt_id, file_name, file_type, storage_path, session_id=None, user_id=None):
     return _insert_tolerant("receipts", {
         "id": receipt_id,
+        "user_id": user_id,
         "file_name": file_name,
         "file_type": file_type,
         "storage_path": storage_path,

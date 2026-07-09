@@ -37,6 +37,7 @@ router = APIRouter()
 async def upload_receipt(
     file: UploadFile | None = File(None),
     text: str | None = Form(None),
+    user_id: str | None = Form(None),
     session_id: str = Depends(get_session_id),
 ):
     """
@@ -49,6 +50,10 @@ async def upload_receipt(
     Tagged with `session_id` (Story 8.3) so it can be grouped with the
     rest of this session's receipts (Task 8.4) instead of every receipt
     in the database being treated as one shared basket.
+
+    Also tagged with the `user_id` (the profile id created earlier in the
+    flow) when provided, so receipts are attributed to the profile that
+    produced them.
     """
 
     if file is None and not (text and text.strip()):
@@ -68,13 +73,13 @@ async def upload_receipt(
             filename=file.filename,
             content_type=file.content_type,
         )
-        create_receipt_row(receipt_id, file.filename, file.content_type, storage_path, session_id)
+        create_receipt_row(receipt_id, file.filename, file.content_type, storage_path, session_id, user_id)
         parsed = scan_receipt_bytes(file_bytes=file_bytes, filename=file.filename)
         input_type = "image"
     else:
         # Text fallback path (Story 1.2) — nothing to store in object storage
         storage_path = None
-        create_receipt_row(receipt_id, None, "text/plain", None, session_id)
+        create_receipt_row(receipt_id, None, "text/plain", None, session_id, user_id)
         parsed = scan_receipt_text(raw_text=text)
         input_type = "text"
 

@@ -50,7 +50,7 @@ export function ProfileStep({
   return (
     <section className="space-y-8 px-6 pb-16">
       <header className="space-y-2">
-        <SectionLabel>Step 3 · Profile</SectionLabel>
+        <SectionLabel>Step 2 · Profile</SectionLabel>
         <h1 className="text-balance text-4xl font-medium leading-none tracking-tight">
           A few quick questions.
         </h1>

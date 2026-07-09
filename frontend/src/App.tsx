@@ -12,7 +12,8 @@ const PROFILE_KEY = "nutriwise.profileId";
 const CONSENT_KEY = "nutriwise.consent";
 
 function App() {
-  const [step, setStep] = useState<StepId>("upload");
+  // Flow order (after the consent/disclaimer gate): profile -> upload -> results.
+  const [step, setStep] = useState<StepId>("profile");
   const [receiptId, setReceiptId] = useState<string | null>(() =>
     localStorage.getItem(RECEIPT_KEY),
   );
@@ -37,7 +38,7 @@ function App() {
   function handleProfileCreated(id: string) {
     setProfileId(id);
     localStorage.setItem(PROFILE_KEY, id);
-    setStep("results");
+    setStep("upload");
   }
 
   async function handleDeleteData() {
@@ -64,7 +65,7 @@ function App() {
     localStorage.removeItem(PROFILE_KEY);
     setReceiptId(null);
     setProfileId(null);
-    setStep("upload");
+    setStep("profile");
   }
 
   return (
@@ -74,30 +75,33 @@ function App() {
       onDeleteData={handleDeleteData}
       canDeleteData={Boolean(receiptId || profileId)}
     >
-      {step === "upload" ? (
-        consented ? (
-          <UploadStep onUploaded={handleUploaded} />
-        ) : (
-          <ConsentBanner onAccept={handleConsent} />
-        )
-      ) : null}
+      {!consented ? (
+        <ConsentBanner onAccept={handleConsent} />
+      ) : (
+        <>
+          {step === "profile" ? (
+            <ProfileStep
+              onProfileCreated={handleProfileCreated}
+              onSkip={() => setStep("upload")}
+            />
+          ) : null}
 
-      {step === "review" ? (
-        receiptId ? (
-          <ReviewStep receiptId={receiptId} onContinue={() => setStep("profile")} />
-        ) : (
-          <EmptyState message="Upload a receipt first." onAction={() => setStep("upload")} />
-        )
-      ) : null}
+          {step === "upload" ? (
+            <UploadStep profileId={profileId} onUploaded={handleUploaded} />
+          ) : null}
 
-      {step === "profile" ? (
-        <ProfileStep
-          onProfileCreated={handleProfileCreated}
-          onSkip={() => setStep("results")}
-        />
-      ) : null}
+          {/* Flow: Disclaimer -> Profile -> Upload -> Review -> Results. */}
+          {step === "review" ? (
+            receiptId ? (
+              <ReviewStep receiptId={receiptId} onContinue={() => setStep("results")} />
+            ) : (
+              <EmptyState message="Upload a receipt first." onAction={() => setStep("upload")} />
+            )
+          ) : null}
 
-      {step === "results" ? <ResultsStep profileId={profileId} /> : null}
+          {step === "results" ? <ResultsStep profileId={profileId} /> : null}
+        </>
+      )}
     </AppShell>
   );
 }

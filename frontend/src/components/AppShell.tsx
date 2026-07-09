@@ -3,10 +3,11 @@ import { cn } from "@/lib/utils";
 
 export type StepId = "upload" | "review" | "profile" | "results";
 
+// Flow order: Disclaimer (consent gate) -> Profile -> Upload -> Review -> Results.
 const NAV: { id: StepId; label: string }[] = [
+  { id: "profile", label: "Profile" },
   { id: "upload", label: "Upload" },
   { id: "review", label: "Review" },
-  { id: "profile", label: "Profile" },
   { id: "results", label: "Results" },
 ];
 
@@ -28,7 +29,7 @@ export function AppShell({
       <nav className="mx-auto flex max-w-3xl items-center justify-between px-6 py-8">
         <button
           type="button"
-          onClick={() => onNavigate("upload")}
+          onClick={() => onNavigate("profile")}
           className="flex items-center gap-3"
         >
           <span className="size-5 rounded-full bg-ink" />

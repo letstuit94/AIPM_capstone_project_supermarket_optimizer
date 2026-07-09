@@ -236,7 +236,7 @@ export function ResultsStep({ profileId }: { profileId: string | null }) {
   return (
     <section className="space-y-8 px-6 pb-16">
       <header className="space-y-2">
-        <SectionLabel>Step 4 · Results</SectionLabel>
+        <SectionLabel>Step 5 · Results</SectionLabel>
         <h1 className="text-balance text-4xl font-medium leading-none tracking-tight">
           Your basket, aggregated.
         </h1>

@@ -62,9 +62,10 @@ async function handle<T>(res: Response): Promise<T> {
 
 // --- Epic 1: Receipts -------------------------------------------------
 
-export function uploadReceiptFile(file: File): Promise<UploadReceiptResponse> {
+export function uploadReceiptFile(file: File, profileId?: string): Promise<UploadReceiptResponse> {
   const formData = new FormData();
   formData.append("file", file);
+  if (profileId) formData.append("user_id", profileId);
   return fetch(`${API_BASE}/receipts`, {
     method: "POST",
     headers: sessionHeaders(),
@@ -72,9 +73,10 @@ export function uploadReceiptFile(file: File): Promise<UploadReceiptResponse> {
   }).then((res) => handle<UploadReceiptResponse>(res));
 }
 
-export function uploadReceiptText(text: string): Promise<UploadReceiptResponse> {
+export function uploadReceiptText(text: string, profileId?: string): Promise<UploadReceiptResponse> {
   const formData = new FormData();
   formData.append("text", text);
+  if (profileId) formData.append("user_id", profileId);
   return fetch(`${API_BASE}/receipts`, {
     method: "POST",
     headers: sessionHeaders(),

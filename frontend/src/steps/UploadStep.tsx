@@ -7,8 +7,10 @@ import type { UploadReceiptResponse } from "@/types/api";
 type Mode = "image" | "text";
 
 export function UploadStep({
+  profileId,
   onUploaded,
 }: {
+  profileId: string | null;
   onUploaded: (receiptId: string) => void;
 }) {
   const [mode, setMode] = useState<Mode>("image");
@@ -23,7 +25,7 @@ export function UploadStep({
     setLoading(true);
     setError(null);
     try {
-      const res = await uploadReceiptFile(file);
+      const res = await uploadReceiptFile(file, profileId ?? undefined);
       setResult(res);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Upload failed.");
@@ -37,7 +39,7 @@ export function UploadStep({
     setLoading(true);
     setError(null);
     try {
-      const res = await uploadReceiptText(pastedText);
+      const res = await uploadReceiptText(pastedText, profileId ?? undefined);
       setResult(res);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Upload failed.");
@@ -49,7 +51,7 @@ export function UploadStep({
   return (
     <section className="space-y-8 px-6 pb-16">
       <header className="space-y-2">
-        <SectionLabel>Step 1 · Receipt</SectionLabel>
+        <SectionLabel>Step 3 · Receipt</SectionLabel>
         <h1 className="text-balance text-4xl font-medium leading-none tracking-tight">
           Bring in a receipt.
         </h1>
