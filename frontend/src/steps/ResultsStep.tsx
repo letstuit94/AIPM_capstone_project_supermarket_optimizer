@@ -7,6 +7,7 @@ import type {
   FeedbackResponseValue,
   NextCartRecommendation,
   NutritionSnapshot,
+  ProgressReport,
 } from "@/types/api";
 
 const STATUS_TONE: Record<DimensionSnapshot["status"], string> = {
@@ -129,6 +130,41 @@ function NextCartCard({ rec }: { rec: NextCartRecommendation }) {
           </div>
         </div>
       ) : null}
+    </Card>
+  );
+}
+
+const TREND_TONE: Record<ProgressReport["trend"], string> = {
+  improving: "text-emerald-600",
+  stable: "text-ink/60",
+  declining: "text-red-600",
+  insufficient_data: "text-ink/40",
+};
+
+function ProgressCard({ progress }: { progress: ProgressReport }) {
+  return (
+    <Card className="space-y-3">
+      <div className="flex items-center justify-between">
+        <SectionLabel>Progress since last receipt</SectionLabel>
+        {progress.has_history ? (
+          <span className={`text-[11px] uppercase tracking-widest ${TREND_TONE[progress.trend]}`}>
+            {progress.trend}
+          </span>
+        ) : null}
+      </div>
+      <p className="text-sm text-ink/70">{progress.message}</p>
+      {progress.deltas.length > 0 ? (
+        <ul className="space-y-1 text-xs text-ink/60">
+          {progress.deltas.map((d) => (
+            <li key={d.dimension} className="capitalize">
+              · {d.dimension}: {d.before ?? "—"} → {d.after ?? "—"} ({d.direction}
+              {d.is_improvement === true ? ", improved" : ""}
+              {d.is_improvement === false ? ", worse" : ""})
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <p className="text-[11px] text-ink/40">{progress.disclaimer}</p>
     </Card>
   );
 }
@@ -272,6 +308,8 @@ export function ResultsStep({ profileId }: { profileId: string | null }) {
         above the detailed nutrition breakdown, not after it.
       */}
       {recommendation ? <NextCartCard rec={recommendation} /> : null}
+
+      {recommendation?.progress ? <ProgressCard progress={recommendation.progress} /> : null}
 
       {recommendation?.status === "recommended" ? (
         <FeedbackWidget

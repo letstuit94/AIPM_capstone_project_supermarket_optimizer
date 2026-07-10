@@ -158,6 +158,29 @@ export interface Recipe {
   prep_minutes?: number | null;
 }
 
+// --- Progress Tracking (integration briefing addendum) -------------------
+
+export interface DimensionDelta {
+  dimension: string;
+  before: number | null;
+  after: number | null;
+  change: number | null;
+  direction: "up" | "down" | "flat" | "unknown";
+  is_improvement: boolean | null;
+}
+
+export type ProgressTrend = "improving" | "stable" | "declining" | "insufficient_data";
+
+export interface ProgressReport {
+  has_history: boolean;
+  receipts_compared: number;
+  deltas: DimensionDelta[];
+  trend: ProgressTrend;
+  addressed_gap_improved: boolean | null;
+  message: string;
+  disclaimer: string;
+}
+
 export interface NextCartRecommendation {
   recommendation_id: string;
   session_id: string;
@@ -171,6 +194,7 @@ export interface NextCartRecommendation {
   confidence: ConfidenceLevel;
   evaluated_candidates: EvaluatedCandidate[];
   recipes: Recipe[];
+  progress?: ProgressReport | null;
 }
 
 // --- Epic 8: Feedback ----------------------------------------------------

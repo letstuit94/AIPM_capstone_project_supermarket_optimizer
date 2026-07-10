@@ -8,6 +8,7 @@ from backend.app.analytics.events import log_event
 from backend.app.db.supabase import get_profile, create_recommendation_row
 from backend.app.models.profile import Profile
 from backend.app.services.nutrition_snapshot import build_snapshot_from_db
+from backend.app.services.progress_tracker import compute_session_progress
 from backend.app.services.recommender import recommend_next_cart, default_profile
 
 router = APIRouter()
@@ -52,6 +53,10 @@ def next_cart(profile_id: Optional[str] = None, session_id: str = Depends(get_se
         profile=profile,
         confidence=snapshot.confidence,
     )
+    # NutriWise Agent - modified: added for Progress Tracking (addendum).
+    # has_history=False (not an error) when this session only has one
+    # receipt so far, so Next Cart still works before any history exists.
+    recommendation.progress = compute_session_progress(session_id)
 
     recommendation_id = str(uuid4())
     payload = recommendation.model_dump(mode="json")
