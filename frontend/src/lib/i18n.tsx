@@ -126,6 +126,8 @@ const STRINGS: Record<string, { en: string; de: string }> = {
     de: "Schließe zuerst das Onboarding ab — danach erscheinen deine Antworten hier zur Bearbeitung.",
   },
   "profile.goToOnboarding": { en: "Go to onboarding", de: "Zum Onboarding" },
+  "profile.userId": { en: "User ID", de: "Nutzer-ID" },
+  "profile.logout": { en: "Log out", de: "Abmelden" },
 
   // Upload step
   "upload.step": { en: "Step 3 · Receipt", de: "Schritt 3 · Kassenbon" },

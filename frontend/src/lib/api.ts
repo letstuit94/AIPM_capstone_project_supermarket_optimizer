@@ -50,6 +50,14 @@ export function setSessionId(sessionId: string): void {
   localStorage.setItem(SESSION_KEY, sessionId);
 }
 
+// Logout (ProfileSummary.tsx): drops the stored session_id entirely, so
+// the very next request mints a fresh, anonymous one instead of reusing
+// this account's — the same "no real auth, session_id is the identity"
+// model as setSessionId above, just in reverse.
+export function clearSession(): void {
+  localStorage.removeItem(SESSION_KEY);
+}
+
 function sessionHeaders(): Record<string, string> {
   const id = getStoredSessionId();
   return id ? { [SESSION_HEADER]: id } : {};

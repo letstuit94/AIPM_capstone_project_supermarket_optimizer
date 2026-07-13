@@ -12,7 +12,7 @@ import { PantryStep } from "@/steps/PantryStep";
 import { ChatOnboardingStep } from "@/steps/ChatOnboardingStep";
 import { ProfileSummary } from "@/steps/ProfileSummary";
 import { ResultsStep } from "@/steps/ResultsStep";
-import { deleteReceipt, deleteProfile, ApiError } from "@/lib/api";
+import { deleteReceipt, deleteProfile, clearSession, ApiError } from "@/lib/api";
 import { LanguageProvider, useLanguage } from "@/lib/i18n";
 
 const RECEIPT_KEY = "nutriwise.receiptId";
@@ -84,6 +84,23 @@ function App() {
     setReceiptId(null);
     setProfileId(null);
     setStep("onboarding");
+  }
+
+  // Logout: ends this browser's session (see clearSession's docstring —
+  // there's no real auth, so "logging out" just drops the session_id
+  // and every locally-cached ID that belonged to it) and returns to the
+  // login page. Deliberately does NOT touch `consented` — that's an
+  // acknowledgment of this browser/device having seen the disclaimer,
+  // not something tied to a specific account, so a re-login shouldn't
+  // have to re-accept it.
+  function handleLogout() {
+    clearSession();
+    localStorage.removeItem(RECEIPT_KEY);
+    localStorage.removeItem(PROFILE_KEY);
+    setReceiptId(null);
+    setProfileId(null);
+    setProfileName(null);
+    setStep("landing");
   }
 
   if (step === "landing") {
@@ -160,7 +177,7 @@ function App() {
 
             {step === "userProfile" ? (
               profileId ? (
-                <ProfileSummary profileId={profileId} />
+                <ProfileSummary profileId={profileId} onLogout={handleLogout} />
               ) : (
                 <EmptyStateProfile onAction={() => setStep("onboarding")} />
               )

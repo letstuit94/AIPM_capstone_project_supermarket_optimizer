@@ -29,9 +29,12 @@ export type StepId =
 // via its own entry points (Landing's "Register", the empty-profile
 // nudge on My Profile) — just not surfaced as a tab to click into at
 // random, which risked resetting an existing user's answers mid-session.
+//
+// "userProfile" also isn't in this list — same treatment as Notifications
+// below: an icon-only button off to the side, not a "section" tab you
+// browse through. Both are account-level, not app-flow destinations.
 const NAV: { id: StepId; labelKey: string; icon: string }[] = [
   { id: "dashboard", labelKey: "nav.dashboard", icon: "🏠" },
-  { id: "userProfile", labelKey: "nav.userProfile", icon: "👤" },
   { id: "upload", labelKey: "nav.upload", icon: "🧾" },
   { id: "review", labelKey: "nav.review", icon: "🔍" },
   { id: "pantry", labelKey: "nav.pantry", icon: "🧺" },
@@ -114,23 +117,38 @@ export function AppShell({
                   </button>
                 ))}
               </div>
-              {/* Notifications — icon-only, deliberately separate from
-                  the main tab pill group (same convention as most apps:
-                  a bell is a signal to check, not a "section" of the
-                  app you navigate into and stay in). Dummy unread dot
-                  hardcoded on for now — see NotificationsStep.tsx. */}
-              <button
-                type="button"
-                onClick={() => onNavigate("notifications")}
-                aria-label={t("nav.notifications")}
-                className={cn(
-                  "relative flex size-8 shrink-0 items-center justify-center rounded-full ring-1 ring-black/5 transition-colors",
-                  step === "notifications" ? "bg-ink text-canvas" : "bg-surface text-ink/55 hover:text-ink",
-                )}
-              >
-                <span aria-hidden>🔔</span>
-                <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-red-500" />
-              </button>
+              {/* Notifications + Profile — icon-only, deliberately
+                  separate from the main tab pill group: neither is a
+                  "section" of the app you browse through, they're
+                  account-level destinations (same convention as most
+                  apps: a bell/avatar sits off to the side, not inside
+                  the primary nav). Dummy unread dot hardcoded on for
+                  now — see NotificationsStep.tsx. */}
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onNavigate("notifications")}
+                  aria-label={t("nav.notifications")}
+                  className={cn(
+                    "relative flex size-8 shrink-0 items-center justify-center rounded-full ring-1 ring-black/5 transition-colors",
+                    step === "notifications" ? "bg-ink text-canvas" : "bg-surface text-ink/55 hover:text-ink",
+                  )}
+                >
+                  <span aria-hidden>🔔</span>
+                  <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-red-500" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigate("userProfile")}
+                  aria-label={t("nav.userProfile")}
+                  className={cn(
+                    "flex size-8 shrink-0 items-center justify-center rounded-full ring-1 ring-black/5 transition-colors",
+                    step === "userProfile" ? "bg-ink text-canvas" : "bg-surface text-ink/55 hover:text-ink",
+                  )}
+                >
+                  <span aria-hidden>👤</span>
+                </button>
+              </div>
             </>
           ) : null}
           {langToggle}
