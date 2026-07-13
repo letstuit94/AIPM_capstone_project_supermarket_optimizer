@@ -2,14 +2,39 @@ import { useEffect, useState } from "react";
 import { SectionLabel, Card, inputCls } from "@/components/AppShell";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/lib/i18n";
-import { getNutritionSnapshot, getNextCart, submitFeedback, ApiError } from "@/lib/api";
+import { getNutritionSnapshot, getNextCart, submitFeedback, consumePantryItem, ApiError } from "@/lib/api";
 import type {
+  AbsoluteGap,
+  Conflict,
   DimensionSnapshot,
   FeedbackResponseValue,
+  Gap,
+  HealthScore,
   NextCartRecommendation,
   NutritionSnapshot,
+  PantryMatch,
   ProgressReport,
 } from "@/types/api";
+
+const HEALTH_SCORE_TONE: Record<HealthScore["label"], string> = {
+  great: "text-emerald-600",
+  good: "text-emerald-600",
+  needs_improvement: "text-amber-600",
+  poor: "text-red-600",
+};
+
+const HEALTH_SCORE_BAR_TONE: Record<HealthScore["label"], string> = {
+  great: "bg-emerald-500",
+  good: "bg-emerald-500",
+  needs_improvement: "bg-amber-500",
+  poor: "bg-red-500",
+};
+
+const COST_TONE: Record<string, string> = {
+  low: "text-emerald-600",
+  medium: "text-amber-600",
+  high: "text-red-600",
+};
 
 const STATUS_TONE: Record<DimensionSnapshot["status"], string> = {
   low: "bg-amber-500",
@@ -23,6 +48,51 @@ const CONFIDENCE_TONE: Record<string, string> = {
   medium: "text-amber-600",
   low: "text-red-600",
 };
+
+// Epic 14.2: one combined "Nährstoff-Status" list instead of two
+// separate sections — density gaps (ratio-only) and absolute gaps
+// (real daily units) are still fundamentally different data (see
+// backend models/absolute_gap.py's docstring on why they're kept
+// separate there), so each entry shows its own unit inline rather than
+// pretending they're the same kind of number.
+function NutrientStatusList({
+  gaps,
+  absoluteGaps,
+}: {
+  gaps: Gap[];
+  absoluteGaps: AbsoluteGap[];
+}) {
+  const { t } = useLanguage();
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-1">
+      {gaps.map((gap) => (
+        <Card key={`density-${gap.dimension}`} className="space-y-1">
+          <p className="text-sm font-medium capitalize tracking-tight">
+            {gap.dimension} — {gap.status}
+          </p>
+          <p className="text-sm text-ink/70">{gap.message}</p>
+        </Card>
+      ))}
+      {absoluteGaps.map((gap) => (
+        <Card key={`absolute-${gap.dimension}`} className="space-y-1">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium capitalize tracking-tight">
+              {gap.dimension} — {gap.status}
+            </p>
+            <span className={`text-[11px] uppercase tracking-widest ${CONFIDENCE_TONE[gap.confidence]}`}>
+              {confidenceText(gap.confidence, t)}
+            </span>
+          </div>
+          <p className="text-sm text-ink/70">{gap.message}</p>
+          <p className="text-xs text-ink/40">
+            {gap.daily_estimate} / {gap.daily_requirement} per day ({Math.round(gap.ratio * 100)}%)
+          </p>
+        </Card>
+      ))}
+    </div>
+  );
+}
 
 function confidenceText(confidence: string, t: (key: string) => string): string {
   return t(`results.confidence.${confidence}`);
@@ -49,6 +119,158 @@ function DimensionBar({ dim }: { dim: DimensionSnapshot }) {
       ) : null}
       <p className="text-xs text-ink/50">{dim.what_this_means}</p>
     </div>
+  );
+}
+
+function CoachMessageCard({ message }: { message: string }) {
+  const { t } = useLanguage();
+  if (!message) return null;
+  return (
+    <Card className="space-y-2 bg-ink text-canvas">
+      <span className="text-xs font-medium uppercase tracking-widest text-canvas/50">
+        {t("results.coach")}
+      </span>
+      <p className="text-base leading-relaxed">{message}</p>
+    </Card>
+  );
+}
+
+function ConflictsCard({
+  conflicts,
+  onEditProfile,
+}: {
+  conflicts: Conflict[];
+  onEditProfile?: () => void;
+}) {
+  const { t } = useLanguage();
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const visible = conflicts.filter((c) => !dismissed.has(c.item));
+
+  if (visible.length === 0) return null;
+
+  return (
+    <Card className="space-y-3 bg-amber-50 ring-1 ring-amber-200">
+      <SectionLabel>{t("results.conflicts")}</SectionLabel>
+      <p className="text-sm text-ink/70">{t("results.conflictsIntro")}</p>
+      <ul className="space-y-3">
+        {visible.map((c) => (
+          <li key={c.item} className="space-y-2 rounded-xl bg-white/70 p-3 ring-1 ring-black/5">
+            <p className="text-sm text-ink/80">{c.message}</p>
+            <div className="flex flex-wrap gap-2">
+              {onEditProfile ? (
+                <button
+                  type="button"
+                  onClick={onEditProfile}
+                  className="rounded-full bg-ink px-3 py-1.5 text-xs font-medium tracking-tight text-canvas"
+                >
+                  {t("results.conflictChanged")}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setDismissed((prev) => new Set(prev).add(c.item))}
+                className="rounded-full bg-zinc-100 px-3 py-1.5 text-xs font-medium tracking-tight text-ink ring-1 ring-black/5 hover:bg-zinc-200"
+              >
+                {t("results.conflictSomeoneElse")}
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+function HealthScoreCard({ score }: { score: HealthScore }) {
+  const { t } = useLanguage();
+  return (
+    <Card className="space-y-3">
+      <div className="flex items-center justify-between">
+        <SectionLabel>{t("results.healthScore")}</SectionLabel>
+        <span className={`text-xs font-medium uppercase tracking-widest ${HEALTH_SCORE_TONE[score.label]}`}>
+          {t(`results.healthScore.${score.label}`)}
+        </span>
+      </div>
+      <div className="flex items-baseline gap-2">
+        <p className="text-4xl font-medium tracking-tight">{score.value}</p>
+        <p className="text-sm text-ink/40">/ 100</p>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-zinc-100">
+        <div
+          className={`h-full rounded-full ${HEALTH_SCORE_BAR_TONE[score.label]}`}
+          style={{ width: `${score.value}%` }}
+        />
+      </div>
+      <p className="text-sm text-ink/70">{score.summary}</p>
+    </Card>
+  );
+}
+
+function EasySwapsCard({ swaps }: { swaps: NextCartRecommendation["easy_swaps"] }) {
+  const { t } = useLanguage();
+  return (
+    <Card className="space-y-3">
+      <SectionLabel>{t("results.easySwaps")}</SectionLabel>
+      <ul className="divide-y divide-black/5">
+        {swaps.map((swap, i) => (
+          <li key={i} className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
+            <div className="min-w-0">
+              <p className="text-sm font-medium tracking-tight">{swap.item}</p>
+              <p className="text-xs text-ink/60">{swap.rationale}</p>
+              <p className="mt-1 text-[11px] uppercase tracking-widest text-ink/40">
+                {t("results.targets")} {swap.targets_gap}
+              </p>
+            </div>
+            <span className={`shrink-0 text-[11px] uppercase tracking-widest ${COST_TONE[swap.cost]}`}>
+              {t(`results.cost.${swap.cost}`)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+function PantryMatchCard({ match, onConsumed }: { match: PantryMatch; onConsumed: () => Promise<void> }) {
+  const { t } = useLanguage();
+  const [busy, setBusy] = useState(false);
+
+  async function handleConsume() {
+    setBusy(true);
+    try {
+      await consumePantryItem(match.item, 1);
+      await onConsumed();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card
+      className={cn(
+        "space-y-3",
+        match.urgent ? "bg-amber-50 ring-1 ring-amber-200" : "bg-emerald-50 ring-1 ring-emerald-200",
+      )}
+    >
+      <div className="flex items-center justify-between">
+        <SectionLabel>{t("results.pantryMatch")}</SectionLabel>
+        {match.urgent ? (
+          <span className="text-[11px] uppercase tracking-widest text-amber-700">
+            {t("results.pantryMatchUrgent")}
+          </span>
+        ) : null}
+      </div>
+      <p className="text-lg font-medium tracking-tight">{match.item}</p>
+      <p className="text-sm text-ink/70">{match.message}</p>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={handleConsume}
+        className="rounded-full bg-ink px-4 py-2 text-xs font-medium tracking-tight text-canvas disabled:opacity-40"
+      >
+        {t("pantry.consumed")}
+      </button>
+    </Card>
   );
 }
 
@@ -138,6 +360,31 @@ function NextCartCard({ rec }: { rec: NextCartRecommendation }) {
           </div>
         </div>
       ) : null}
+
+    </Card>
+  );
+}
+
+function PantryRecipesCard({ recipes }: { recipes: NextCartRecommendation["pantry_recipes"] }) {
+  const { t } = useLanguage();
+  return (
+    <Card className="space-y-3">
+      <SectionLabel>{t("results.pantryRecipes")}</SectionLabel>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {recipes.map((recipe, i) => (
+          <div key={i} className="rounded-xl bg-emerald-50 p-3 ring-1 ring-emerald-100">
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="text-sm font-medium tracking-tight">{recipe.title}</p>
+              {recipe.prep_minutes != null ? (
+                <span className="shrink-0 text-[10px] uppercase tracking-widest text-ink/40">
+                  {recipe.prep_minutes}m
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-1 text-xs text-ink/60">{recipe.description}</p>
+          </div>
+        ))}
+      </div>
     </Card>
   );
 }
@@ -172,6 +419,24 @@ function ProgressCard({ progress }: { progress: ProgressReport }) {
             </li>
           ))}
         </ul>
+      ) : null}
+      {progress.absolute_deltas.filter((d) => d.direction !== "unknown").length > 0 ? (
+        <div className="space-y-1 border-t border-black/5 pt-3">
+          <p className="text-[11px] uppercase tracking-widest text-ink/40">
+            {t("results.absoluteProgress")}
+          </p>
+          <ul className="space-y-1 text-xs text-ink/60">
+            {progress.absolute_deltas
+              .filter((d) => d.direction !== "unknown")
+              .map((d) => (
+                <li key={d.dimension} className="capitalize">
+                  · {d.dimension}: {d.before ?? "—"} → {d.after ?? "—"} ({d.direction}
+                  {d.is_improvement === true ? `, ${t("results.improved")}` : ""}
+                  {d.is_improvement === false ? `, ${t("results.worse")}` : ""})
+                </li>
+              ))}
+          </ul>
+        </div>
       ) : null}
       <p className="text-[11px] text-ink/40">{progress.disclaimer}</p>
     </Card>
@@ -251,11 +516,23 @@ function FeedbackWidget({ recommendationId }: { recommendationId: string }) {
   );
 }
 
-export function ResultsStep({ profileId }: { profileId: string | null }) {
+export function ResultsStep({
+  profileId,
+  onEditProfile,
+}: {
+  profileId: string | null;
+  onEditProfile?: () => void;
+}) {
   const [snapshot, setSnapshot] = useState<NutritionSnapshot | null>(null);
   const [recommendation, setRecommendation] = useState<NextCartRecommendation | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Epic 14.1: collapsed by default so the page reads as a short "here's
+  // where you stand" summary first, not a wall of cards.
+  const [showDetails, setShowDetails] = useState(false);
+  // Epic 14.3: nested toggle — even once Details is open, the raw
+  // dimension bars are the most technical/skippable part of it.
+  const [showDimensions, setShowDimensions] = useState(false);
   const { t } = useLanguage();
 
   async function load() {
@@ -312,12 +589,37 @@ export function ResultsStep({ profileId }: { profileId: string | null }) {
       ) : null}
 
       {/*
-        Story 7.2: the recommendation is the primary outcome and goes
-        above the detailed nutrition breakdown, not after it.
+        The coach's voice greets first — a warm phrasing of everything
+        below, computed once both snapshot and recommendation are in.
       */}
-      {recommendation ? <NextCartCard rec={recommendation} /> : null}
+      {recommendation?.coach_message ? (
+        <CoachMessageCard message={recommendation.coach_message} />
+      ) : null}
 
-      {recommendation?.progress ? <ProgressCard progress={recommendation.progress} /> : null}
+      {/*
+        Status quo first: "where do you stand" (Health Score) before the
+        single deliberate Next Cart pick — the score is the entry point,
+        the recommendation is the primary *action*.
+      */}
+      {snapshot && snapshot.conflicts.length > 0 ? (
+        <ConflictsCard conflicts={snapshot.conflicts} onEditProfile={onEditProfile} />
+      ) : null}
+
+      {snapshot ? <HealthScoreCard score={snapshot.health_score} /> : null}
+
+      {/*
+        Story 7.2: the recommendation is the primary outcome and goes
+        above the detailed nutrition breakdown, not after it. The pantry
+        match (if any) is shown alongside it, not instead of it — Option
+        A from docs/architektur_entscheidungen.md: two separate cards, so
+        an expiring item's urgency stays visible rather than hidden
+        behind a tab.
+      */}
+      {recommendation?.pantry_match ? (
+        <PantryMatchCard match={recommendation.pantry_match} onConsumed={load} />
+      ) : null}
+
+      {recommendation ? <NextCartCard rec={recommendation} /> : null}
 
       {recommendation?.status === "recommended" ? (
         <FeedbackWidget
@@ -326,45 +628,82 @@ export function ResultsStep({ profileId }: { profileId: string | null }) {
         />
       ) : null}
 
-      {snapshot ? (
+      {/* Epic 14.1: everything below is secondary/technical detail — collapsed by default. */}
+      {snapshot || recommendation ? (
+        <button
+          type="button"
+          onClick={() => setShowDetails((v) => !v)}
+          className="rounded-full bg-zinc-100 px-4 py-2 text-xs font-medium tracking-tight text-ink ring-1 ring-black/5 hover:bg-zinc-200"
+        >
+          {showDetails ? t("results.hideDetails") : t("results.showDetails")}
+        </button>
+      ) : null}
+
+      {showDetails ? (
         <>
-          <Card className="space-y-1">
-            <div className="flex items-center justify-between">
-              <SectionLabel>
-                {t("results.basedOnPrefix")} {snapshot.receipts_analyzed} {t("results.receiptsSuffix")}{" "}
-                {snapshot.items_analyzed} {t("results.itemsSuffix")}
-              </SectionLabel>
-              <span className={`text-[11px] uppercase tracking-widest ${CONFIDENCE_TONE[snapshot.confidence]}`}>
-                {confidenceText(snapshot.confidence, t)}
-              </span>
-            </div>
-            <p className="text-xs text-ink/50">
-              {snapshot.profile.items_matched} {t("results.matchedVia")}{" "}
-              {snapshot.profile.items_fallback} {t("results.estimatedByCategory")}
-            </p>
-          </Card>
+          {recommendation && recommendation.easy_swaps.length > 0 ? (
+            <EasySwapsCard swaps={recommendation.easy_swaps} />
+          ) : null}
 
-          <Card className="space-y-6">
-            <SectionLabel>{t("results.nutritionSnapshot")}</SectionLabel>
-            {snapshot.dimensions.map((dim) => (
-              <DimensionBar key={dim.dimension} dim={dim} />
-            ))}
-          </Card>
+          {recommendation && recommendation.pantry_recipes.length > 0 ? (
+            <PantryRecipesCard recipes={recommendation.pantry_recipes} />
+          ) : null}
 
-          {snapshot.gaps.length > 0 ? (
-            <div className="space-y-4">
-              <SectionLabel>{t("results.topGaps")}</SectionLabel>
-              <div className="grid gap-4 sm:grid-cols-1">
-                {snapshot.gaps.map((gap) => (
-                  <Card key={gap.dimension} className="space-y-1">
-                    <p className="text-sm font-medium capitalize tracking-tight">
-                      {gap.dimension} — {gap.status}
-                    </p>
-                    <p className="text-sm text-ink/70">{gap.message}</p>
-                  </Card>
-                ))}
-              </div>
-            </div>
+          {recommendation?.progress ? <ProgressCard progress={recommendation.progress} /> : null}
+
+          {snapshot ? (
+            <>
+              <Card className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <SectionLabel>
+                    {t("results.basedOnPrefix")} {snapshot.receipts_analyzed} {t("results.receiptsSuffix")}{" "}
+                    {snapshot.items_analyzed} {t("results.itemsSuffix")}
+                  </SectionLabel>
+                  <span className={`text-[11px] uppercase tracking-widest ${CONFIDENCE_TONE[snapshot.confidence]}`}>
+                    {confidenceText(snapshot.confidence, t)}
+                  </span>
+                </div>
+                <p className="text-xs text-ink/50">
+                  {snapshot.profile.items_matched} {t("results.matchedVia")}{" "}
+                  {snapshot.profile.items_fallback} {t("results.estimatedByCategory")}
+                </p>
+              </Card>
+
+              {/* Epic 14.3: nested toggle — raw dimension bars are the most technical part. */}
+              <Card className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <SectionLabel>{t("results.nutritionSnapshot")}</SectionLabel>
+                  <button
+                    type="button"
+                    onClick={() => setShowDimensions((v) => !v)}
+                    className="text-[11px] uppercase tracking-widest text-ink/40 hover:text-ink"
+                  >
+                    {showDimensions ? t("results.hideDetails") : t("results.showDetails")}
+                  </button>
+                </div>
+                {showDimensions ? (
+                  <div className="space-y-6">
+                    {snapshot.dimensions.map((dim) => (
+                      <DimensionBar key={dim.dimension} dim={dim} />
+                    ))}
+                  </div>
+                ) : null}
+              </Card>
+
+              {/* Epic 14.2: density gaps + absolute gaps in one combined list. */}
+              {snapshot.gaps.length > 0 || snapshot.absolute_gaps.length > 0 ? (
+                <div className="space-y-4">
+                  <SectionLabel>{t("results.nutrientStatus")}</SectionLabel>
+                  <NutrientStatusList gaps={snapshot.gaps} absoluteGaps={snapshot.absolute_gaps} />
+                </div>
+              ) : (
+                <div className="rounded-2xl bg-zinc-50 px-5 py-4 text-xs text-ink/50 ring-1 ring-black/5">
+                  {snapshot.has_sufficient_data
+                    ? t("results.absoluteGapsNoneFound")
+                    : t("results.absoluteGapsNoData")}
+                </div>
+              )}
+            </>
           ) : null}
         </>
       ) : null}

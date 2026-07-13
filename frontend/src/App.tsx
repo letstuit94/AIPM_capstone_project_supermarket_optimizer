@@ -3,6 +3,7 @@ import { AppShell, type StepId } from "@/components/AppShell";
 import { ConsentBanner } from "@/components/ConsentBanner";
 import { UploadStep } from "@/steps/UploadStep";
 import { ReviewStep } from "@/steps/ReviewStep";
+import { PantryStep } from "@/steps/PantryStep";
 import { ChatOnboardingStep } from "@/steps/ChatOnboardingStep";
 import { ProfileSummary } from "@/steps/ProfileSummary";
 import { ResultsStep } from "@/steps/ResultsStep";
@@ -112,7 +113,11 @@ function App() {
               )
             ) : null}
 
-            {step === "results" ? <ResultsStep profileId={profileId} /> : null}
+            {step === "pantry" ? <PantryStep /> : null}
+
+            {step === "results" ? (
+              <ResultsStep profileId={profileId} onEditProfile={() => setStep("userProfile")} />
+            ) : null}
           </>
         )}
       </AppShell>

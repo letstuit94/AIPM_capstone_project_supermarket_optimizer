@@ -1,7 +1,9 @@
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Depends
+from pydantic import ValidationError
 
 from backend.app.services.session import get_session_id
 from backend.app.analytics.events import log_event
@@ -9,7 +11,13 @@ from backend.app.db.supabase import get_profile, create_recommendation_row
 from backend.app.models.profile import Profile
 from backend.app.services.nutrition_snapshot import build_snapshot_from_db
 from backend.app.services.progress_tracker import compute_session_progress
-from backend.app.services.recommender import recommend_next_cart, default_profile
+from backend.app.services.recommender import recommend_next_cart, default_profile, gap_from_absolute, find_pantry_match
+from backend.app.services.absolute_gap_detector import detect_absolute_gaps
+from backend.app.services.pantry import get_pantry
+from backend.app.services.recipe_suggester import suggest_recipes_from_pantry
+from backend.app.services.easy_swaps import suggest_easy_swaps
+from backend.app.services.health_score import compute_health_score
+from backend.app.services.nutri_coach import generate_coach_message
 
 router = APIRouter()
 
@@ -37,7 +45,16 @@ def next_cart(profile_id: Optional[str] = None, session_id: str = Depends(get_se
         row = get_profile(profile_id)
         if row is None:
             raise HTTPException(status_code=404, detail="Profile not found.")
-        profile = Profile.model_validate(row)
+        try:
+            profile = Profile.model_validate(row)
+        except ValidationError:
+            # Bug fix: see the identical fallback in api/nutrition.py —
+            # a profile row saved under an older enum set (renamed
+            # chat-onboarding option strings) used to 500 all of Next
+            # Cart instead of just falling back to the same
+            # no-exclusions default already used pre-onboarding.
+            print(f"[api] profile {profile_id} failed validation (stale schema?) — using default profile")
+            profile = default_profile()
     else:
         profile = default_profile()
 
@@ -51,10 +68,19 @@ def next_cart(profile_id: Optional[str] = None, session_id: str = Depends(get_se
             detail="No receipt items found to analyse. Upload a receipt first.",
         )
 
+    # Absolute (Bedarf vs. Ist) gaps, e.g. iron, appended after the
+    # density gaps: Epic 4's severity ranking and the pantry-confirmation
+    # based confidence here aren't on comparable scales, so density gaps
+    # keep priority unless a Q6 symptom boosts iron specifically (see
+    # _SYMPTOM_PRIORITY_BOOST in recommender.py).
+    absolute_gaps = detect_absolute_gaps(session_id, profile)
+    gaps = list(snapshot.gaps) + [gap_from_absolute(g) for g in absolute_gaps]
+
     recommendation = recommend_next_cart(
-        gaps=snapshot.gaps,
+        gaps=gaps,
         profile=profile,
         confidence=snapshot.confidence,
+        session_id=session_id,
     )
     # NutriWise Agent - modified: added for Progress Tracking (addendum).
     # has_history=False (not an error) when this session only has one
@@ -70,4 +96,65 @@ def next_cart(profile_id: Optional[str] = None, session_id: str = Depends(get_se
         session_id,
     )
 
-    return {"recommendation_id": recommendation_id, "session_id": session_id, **payload}
+    pantry_items = get_pantry(session_id)
+
+    # "Cook with what you have": recipes buildable from the pantry that
+    # also target the same gap the shopping recommendation above
+    # addresses (e.g. egg already in stock + open iron gap -> egg +
+    # spinach salad), on top of (not instead of) the shopping suggestion.
+    pantry_recipes = []
+    if absolute_gaps:
+        pantry_item_names = [item["normalized_name"] for item in pantry_items]
+        pantry_recipes = [
+            recipe.model_dump()
+            for recipe in suggest_recipes_from_pantry(pantry_item_names, absolute_gaps[0])
+        ]
+
+    # "Use what you already have" — shown alongside (never instead of)
+    # the purchase recommendation above, so the user can choose either
+    # (docs/architektur_entscheidungen.md, ToDo 2).
+    pantry_match = find_pantry_match(gaps, pantry_items, profile, session_id=session_id)
+
+    # Easy, low-effort/cheap/in-season swaps across every flagged gap —
+    # a broader supplementary list alongside the one deliberate Next
+    # Cart pick above (see services/easy_swaps.py).
+    easy_swaps = [
+        swap.model_dump()
+        for swap in suggest_easy_swaps(gaps, profile, datetime.now(timezone.utc).month)
+    ]
+
+    # Nutri-Coach: a warm, conversational phrasing of everything already
+    # computed above — the LLM only rephrases these facts, it never adds
+    # new ones (see services/nutri_coach.py). Falls back to a rule-based
+    # template on any Gemini failure, so this can never break Next Cart.
+    health_score = compute_health_score(snapshot.dimensions, absolute_gaps)
+    coach_context = {
+        "health_score": health_score.model_dump(),
+        "top_gaps": [
+            {"dimension": g.dimension, "status": g.status.value, "message": g.message}
+            for g in gaps[:3]
+        ],
+        "recommendation": {
+            "status": payload.get("status"),
+            "item": payload.get("item"),
+            "action_type": payload.get("action_type"),
+            "message": payload.get("message"),
+        },
+        "easy_swaps": [
+            {"item": s["item"], "targets_gap": s["targets_gap"], "cost": s["cost"]}
+            for s in easy_swaps[:3]
+        ],
+        "progress_trend": recommendation.progress.trend if recommendation.progress else None,
+    }
+    language = profile.language.value if getattr(profile, "language", None) else "en"
+    coach_message = generate_coach_message(coach_context, language=language)
+
+    return {
+        "recommendation_id": recommendation_id,
+        "session_id": session_id,
+        **payload,
+        "pantry_recipes": pantry_recipes,
+        "easy_swaps": easy_swaps,
+        "coach_message": coach_message,
+        "pantry_match": pantry_match.model_dump() if pantry_match else None,
+    }

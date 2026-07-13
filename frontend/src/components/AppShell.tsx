@@ -2,16 +2,18 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/lib/i18n";
 
-export type StepId = "upload" | "review" | "onboarding" | "userProfile" | "results";
+export type StepId = "upload" | "review" | "onboarding" | "userProfile" | "pantry" | "results";
 
 // Flow order: Disclaimer (consent gate) -> Onboarding -> Upload -> Review -> Results.
-// "User Profile" is a standalone settings-style page (edit what onboarding
-// collected), not part of that linear flow — reachable from the nav at any time.
+// "User Profile" and "Pantry" (Lager-Bestand) are standalone pages reachable
+// from the nav at any time, not part of that linear flow — the pantry
+// accumulates across every receipt in the session, not just the latest one.
 const NAV: { id: StepId; labelKey: string }[] = [
   { id: "onboarding", labelKey: "nav.onboarding" },
   { id: "userProfile", labelKey: "nav.userProfile" },
   { id: "upload", labelKey: "nav.upload" },
   { id: "review", labelKey: "nav.review" },
+  { id: "pantry", labelKey: "nav.pantry" },
   { id: "results", labelKey: "nav.results" },
 ];
 

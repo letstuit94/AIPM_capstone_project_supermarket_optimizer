@@ -23,6 +23,7 @@ from backend.app.db.supabase import (
     UNDEFINED_COLUMN_CODE,
 )
 from backend.app.db.receipt_items_repo import insert_receipt_items
+from backend.app.services.pantry import add_items_to_pantry
 from backend.app.models.receipt import ParsedReceipt, ReceiptItemUpdate
 from backend.app.services.nutrition_mapping import map_items
 from backend.app.services.nutrition_snapshot import invalidate_snapshot_cache
@@ -113,6 +114,7 @@ async def upload_receipt(
 
     update_receipt_with_parse(receipt_id, parsed)
     insert_receipt_items(receipt_id, parsed)
+    add_items_to_pantry(session_id, parsed.get("items", []))
     invalidate_snapshot_cache(session_id)
     log_event("upload_completed", {"receipt_id": receipt_id, "items_count": validated.items_count}, session_id)
 

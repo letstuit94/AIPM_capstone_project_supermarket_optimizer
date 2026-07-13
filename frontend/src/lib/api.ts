@@ -1,9 +1,12 @@
 import type {
   ApiErrorBody,
+  ConsumptionLogResponse,
   Feedback,
   FeedbackCreate,
   NextCartRecommendation,
   NutritionSnapshot,
+  PantryItem,
+  PantryResponse,
   Profile,
   ProfileCreate,
   ReceiptDetailResponse,
@@ -157,6 +160,89 @@ export function getNutritionSnapshot(profileId?: string): Promise<NutritionSnaps
   const query = profileId ? `?profile_id=${encodeURIComponent(profileId)}` : "";
   return fetch(`${API_BASE}/nutrition/snapshot${query}`, { headers: sessionHeaders() }).then((res) =>
     handle<NutritionSnapshot>(res),
+  );
+}
+
+// --- Pantry (Lager-Bestand) -----------------------------------------------
+//
+// Cumulative running stock, not a snapshot: every receipt upload adds to
+// it server-side, and it only shrinks via consume/remove below. See
+// backend services/pantry.py.
+
+export function getPantry(): Promise<PantryResponse> {
+  return fetch(`${API_BASE}/pantry`, { headers: sessionHeaders() }).then((res) =>
+    handle<PantryResponse>(res),
+  );
+}
+
+export function consumePantryItem(
+  normalizedName: string,
+  quantity: number,
+  consumedAt?: string,
+): Promise<{ session_id: string; normalized_name: string; consumed: number }> {
+  return fetch(`${API_BASE}/pantry/items/${encodeURIComponent(normalizedName)}/consume`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...sessionHeaders() },
+    body: JSON.stringify({ quantity, consumed_at: consumedAt }),
+  }).then((res) =>
+    handle<{ session_id: string; normalized_name: string; consumed: number }>(res),
+  );
+}
+
+// Tages-Log: log food that may or may not be in the pantry, for a given
+// day (retroactive logging supported via `consumedAt`). Matches an
+// existing pantry item by name if one exists (reduces stock like a
+// normal consume); otherwise logs a standalone entry — see backend
+// services/pantry.py's log_manual_consumption.
+export function logManualConsumption(
+  name: string,
+  quantity: number,
+  consumedAt?: string,
+  unit?: string,
+  category?: string,
+): Promise<{ session_id: string; name: string; logged: number; matched: boolean }> {
+  return fetch(`${API_BASE}/pantry/log`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...sessionHeaders() },
+    body: JSON.stringify({ name, quantity, unit, category, consumed_at: consumedAt }),
+  }).then((res) =>
+    handle<{ session_id: string; name: string; logged: number; matched: boolean }>(res),
+  );
+}
+
+// Correct a pantry item's unit/category after the fact (Epic 12.3) — an
+// OCR mis-categorization would otherwise silently skew its shelf-life
+// estimate and gram-conversion. `category` must be one of the 8
+// canonical categories (see PANTRY_CATEGORIES in PantryStep.tsx).
+export function updatePantryItemMetadata(
+  normalizedName: string,
+  fields: { unit?: string; category?: string },
+): Promise<{ session_id: string; normalized_name: string; item: PantryItem }> {
+  return fetch(`${API_BASE}/pantry/items/${encodeURIComponent(normalizedName)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...sessionHeaders() },
+    body: JSON.stringify(fields),
+  }).then((res) =>
+    handle<{ session_id: string; normalized_name: string; item: PantryItem }>(res),
+  );
+}
+
+export function getConsumptionLogForDate(date: string): Promise<ConsumptionLogResponse> {
+  return fetch(`${API_BASE}/pantry/log?date=${encodeURIComponent(date)}`, {
+    headers: sessionHeaders(),
+  }).then((res) => handle<ConsumptionLogResponse>(res));
+}
+
+export function removePantryItem(
+  normalizedName: string,
+  quantity: number,
+): Promise<{ session_id: string; normalized_name: string; removed: number }> {
+  return fetch(`${API_BASE}/pantry/items/${encodeURIComponent(normalizedName)}/remove`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...sessionHeaders() },
+    body: JSON.stringify({ quantity }),
+  }).then((res) =>
+    handle<{ session_id: string; normalized_name: string; removed: number }>(res),
   );
 }
 

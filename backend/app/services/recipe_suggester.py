@@ -45,3 +45,38 @@ def suggest_recipes(item: Optional[str], limit: int = 3) -> List[Recipe]:
     if not item:
         return []
     return [Recipe.model_validate(r) for r in RECIPES.get(item, [])[:limit]]
+
+
+def suggest_recipes_from_pantry(pantry_item_names, gap, limit: int = 3) -> List[Recipe]:
+    """
+    "Cook with what you have": recipes buildable from items already in
+    the pantry that also target `gap` (e.g. egg is in stock + an iron
+    gap is open -> suggest an egg-based recipe from the iron candidate
+    list, not a generic one). Only considers items that are BOTH a
+    real recommendation candidate for this gap (data/recommendations.json)
+    AND present in the pantry — same "no invented facts" guarantee as
+    suggest_recipes(): a suggestion always traces back to a real
+    recipes.json entry for a real, currently-available product.
+
+    Imported here (not at module level) to avoid a recommender.py <->
+    recipe_suggester.py import cycle, since recommender.py already
+    imports suggest_recipes().
+    """
+
+    if not pantry_item_names:
+        return []
+
+    from backend.app.services.recommender import RECOMMENDATIONS
+
+    normalized_pantry = {name.strip().lower() for name in pantry_item_names}
+    candidates = RECOMMENDATIONS.get(f"{gap.dimension}:{gap.status.value}", [])
+
+    recipes: List[Recipe] = []
+    for candidate in candidates:
+        if candidate["item"].strip().lower() not in normalized_pantry:
+            continue
+        recipes.extend(suggest_recipes(candidate["item"], limit=limit - len(recipes)))
+        if len(recipes) >= limit:
+            break
+
+    return recipes

@@ -343,3 +343,22 @@ def get_feedback_by_recommendation(recommendation_id: str):
         print(f"[db] 'feedback' table missing (migration pending?) — returning no feedback")
         return []
     return result.data
+
+
+def get_feedback_by_session(session_id: str):
+    """Every feedback row this session has ever submitted (P1.1 groundwork, preference re-weighting)."""
+
+    try:
+        result = (
+            supabase.table("feedback")
+            .select("*")
+            .eq("session_id", session_id)
+            .order("created_at")
+            .execute()
+        )
+    except APIError as e:
+        if e.code != _MISSING_TABLE_CODE:
+            raise
+        print(f"[db] 'feedback' table missing (migration pending?) — returning no feedback")
+        return []
+    return result.data
