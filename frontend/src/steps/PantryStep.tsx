@@ -38,6 +38,20 @@ const PANTRY_CATEGORIES = [
   "other",
 ] as const;
 
+// Icon system stays emoji (no icon library) per the corporate-design
+// pass — this was the one real gap: category *names* existed already,
+// but nothing visually distinguished them at a glance.
+export const CATEGORY_ICON: Record<(typeof PANTRY_CATEGORIES)[number], string> = {
+  dairy: "🥛",
+  grain: "🌾",
+  vegetable: "🥦",
+  fruit: "🍎",
+  protein: "🍗",
+  snack: "🍪",
+  drink: "🥤",
+  other: "📦",
+};
+
 // Shelf-life is an estimate (see backend services/shelf_life.py) based on
 // category + when this item was last replenished — not a food-safety
 // guarantee, just an "expiring soon" nudge, so the tone stays cautious
@@ -475,7 +489,10 @@ export function PantryStep({
               className="overflow-hidden rounded-2xl bg-surface ring-1 ring-black/5"
             >
               <summary className="flex cursor-pointer select-none items-center justify-between px-5 py-3 text-sm font-medium tracking-tight marker:content-none">
-                <span>{t(`pantry.category.${group.category}`)}</span>
+                <span className="flex items-center gap-2">
+                  <span aria-hidden>{CATEGORY_ICON[group.category]}</span>
+                  {t(`pantry.category.${group.category}`)}
+                </span>
                 <span className="text-xs font-normal text-ink/40">{group.items.length}</span>
               </summary>
               <ul className="divide-y divide-black/5 border-t border-black/5">

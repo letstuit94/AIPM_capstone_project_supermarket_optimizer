@@ -68,7 +68,9 @@ const STRINGS: Record<string, { en: string; de: string }> = {
     de: "Für diese Demo noch nicht gebaut.",
   },
 
-  // Notifications (dummy — NotificationsStep.tsx)
+  // Notifications (NotificationsStep.tsx) — built from real signals
+  // already computed elsewhere (pantry reminder, coach message, weekly
+  // trend, latest receipt status), no separate backend endpoint.
   "notifications.title": { en: "Notifications", de: "Mitteilungen" },
   "notifications.body": {
     en: "Reminders and insights from your coach, all in one place.",
@@ -76,10 +78,21 @@ const STRINGS: Record<string, { en: string; de: string }> = {
   },
   "notifications.markAllRead": { en: "Mark all as read", de: "Alle als gelesen markieren" },
   "notifications.empty": { en: "You're all caught up.", de: "Du bist auf dem neuesten Stand." },
-  "notifications.dummyBadge": {
-    en: "Dummy — static list, no live data yet",
-    de: "Dummy — statische Liste, noch keine echten Daten",
+  "notifications.loading": { en: "Loading…", de: "Wird geladen…" },
+  "notifications.loadFailed": { en: "Could not load your notifications.", de: "Mitteilungen konnten nicht geladen werden." },
+  "notifications.reminderTitle": {
+    en: "You haven't confirmed your pantry in a while.",
+    de: "Du hast dein Lager länger nicht bestätigt.",
   },
+  "notifications.reminderDetail": {
+    en: "{days} days since your last confirmation — estimates are getting less accurate.",
+    de: "{days} Tage seit deiner letzten Bestätigung — Schätzungen werden ungenauer.",
+  },
+  "notifications.insightTitle": { en: "New insight from your coach", de: "Neue Erkenntnis von deinem Coach" },
+  "notifications.progressTitle": { en: "This week's trend", de: "Trend diese Woche" },
+  "notifications.receiptTitle": { en: "Your latest receipt", de: "Dein letzter Kassenbon" },
+  "notifications.receiptProcessed": { en: "Analyzed and added to your pantry.", de: "Analysiert und ins Lager übernommen." },
+  "notifications.receiptUploaded": { en: "Uploaded, analysis in progress.", de: "Hochgeladen, Analyse läuft." },
 
   // Consent banner
   "consent.badge": { en: "Before you start", de: "Bevor es losgeht" },

@@ -2,6 +2,7 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/lib/i18n";
 import { Footer } from "@/components/Footer";
+import { Logo } from "@/components/Logo";
 
 export type StepId =
   | "landing"
@@ -96,7 +97,9 @@ export function AppShell({
           onClick={() => onNavigate("results")}
           className="flex shrink-0 items-center gap-3"
         >
-          <span className="size-5 rounded-full bg-ink" />
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent">
+            <Logo className="size-3.5" />
+          </span>
           <span className="text-sm font-medium tracking-tight">NutriWise</span>
         </button>
         {/* Bug fix: the tab list used to be `hidden sm:flex` — on any
@@ -130,8 +133,10 @@ export function AppShell({
                   "section" of the app you browse through, they're
                   account-level destinations (same convention as most
                   apps: a bell/avatar sits off to the side, not inside
-                  the primary nav). Dummy unread dot hardcoded on for
-                  now — see NotificationsStep.tsx. */}
+                  the primary nav). The unread dot is a static visual
+                  affordance, not wired to NotificationsStep.tsx's actual
+                  unread count — that would mean fetching pantry/next-cart
+                  data here too, which this shell deliberately doesn't do. */}
               <div className="flex shrink-0 items-center gap-2">
                 <button
                   type="button"

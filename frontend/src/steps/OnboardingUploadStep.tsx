@@ -72,8 +72,8 @@ export function OnboardingUploadStep({
         <span className="inline-block rounded-full bg-zinc-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-ink/50">
           {t("onboardingUpload.badge")}
         </span>
-        <h1 className="mx-auto max-w-xl text-balance font-serif text-2xl font-bold leading-tight tracking-tight text-ink sm:text-3xl">
-          {t("onboardingUpload.titleLine1")} <em className="text-[#7c9a6a]">{t("onboardingUpload.titleLine2")}</em>
+        <h1 className="mx-auto max-w-xl text-balance text-2xl font-bold leading-tight tracking-tight text-ink sm:text-3xl">
+          {t("onboardingUpload.titleLine1")} <span className="text-accent">{t("onboardingUpload.titleLine2")}</span>
         </h1>
       </header>
 
@@ -81,11 +81,11 @@ export function OnboardingUploadStep({
           (ChatOnboardingStep.tsx) — makes the end-to-end journey
           (profile -> baseline receipt) visually explicit as one flow. */}
       <div className="mx-auto flex max-w-md items-center gap-2 text-[11px] font-medium uppercase tracking-widest text-ink/40">
-        <span className="flex items-center gap-1.5 text-[#7c9a6a]">
-          <span className="flex size-4 items-center justify-center rounded-full bg-[#7c9a6a] text-[9px] text-white">✓</span>
+        <span className="flex items-center gap-1.5 text-accent">
+          <span className="flex size-4 items-center justify-center rounded-full bg-accent text-[9px] text-white">✓</span>
           {t("onboardingUpload.progressProfile")}
         </span>
-        <span className="h-px flex-1 bg-[#7c9a6a]" />
+        <span className="h-px flex-1 bg-accent" />
         <span className="flex items-center gap-1.5 text-ink">
           <span className="flex size-4 items-center justify-center rounded-full bg-ink text-[9px] text-canvas">2</span>
           {t("onboardingUpload.progressReceipt")}
@@ -96,7 +96,7 @@ export function OnboardingUploadStep({
         <div className="flex items-start gap-2">
           <span
             aria-hidden
-            className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#7c9a6a] text-sm ring-2 ring-white"
+            className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent text-sm ring-2 ring-white"
           >
             🌱
           </span>

@@ -3,6 +3,7 @@ import { useLanguage } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { setSessionId, getProfileBySession, ApiError } from "@/lib/api";
 import { Footer } from "@/components/Footer";
+import { Logo } from "@/components/Logo";
 
 // Demo-only "login": there's no real auth in this MVP (see lib/api.ts's
 // session.ts docstring) — instead each demo account is just a fixed,
@@ -48,17 +49,19 @@ export function AccountPickerStep({
   }
 
   return (
-    <div className="min-h-screen bg-[#f8f2e6] font-sans text-[#2a2f28] antialiased">
+    <div className="min-h-screen bg-canvas font-sans text-ink antialiased">
       <header className="mx-auto flex max-w-3xl items-center gap-3 px-6 py-8">
-        <span className="size-5 rounded-full bg-[#2a2f28]" />
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent">
+          <Logo className="size-3.5" />
+        </span>
         <span className="text-sm font-medium tracking-tight">NutriWise</span>
       </header>
 
       <main className="mx-auto max-w-3xl px-6 pb-24 text-center">
-        <h1 className="mx-auto max-w-xl text-balance font-serif text-4xl font-bold leading-[1.1] tracking-tight text-[#1c231a]">
+        <h1 className="mx-auto max-w-xl text-balance text-4xl font-bold leading-[1.1] tracking-tight text-ink">
           {t("accountPicker.title")}
         </h1>
-        <p className="mx-auto mt-4 max-w-[48ch] text-pretty text-sm text-[#4a4f45]">
+        <p className="mx-auto mt-4 max-w-[48ch] text-pretty text-sm text-ink/60">
           {t("accountPicker.body")}
         </p>
 
@@ -70,14 +73,14 @@ export function AccountPickerStep({
               onClick={() => selectAccount(account)}
               disabled={loadingKey !== null}
               className={cn(
-                "flex flex-col items-center gap-3 rounded-2xl bg-white/70 p-6 ring-1 ring-[#2a2f28]/10 transition-all hover:-translate-y-0.5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50",
+                "flex flex-col items-center gap-3 rounded-2xl bg-surface p-6 ring-1 ring-black/5 transition-all hover:-translate-y-0.5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50",
               )}
             >
-              <span className="flex size-14 items-center justify-center rounded-full bg-[#8fa97d] text-lg font-semibold text-white">
+              <span className="flex size-14 items-center justify-center rounded-full bg-accent text-lg font-semibold text-white">
                 {account.name[0]}
               </span>
               <span className="text-sm font-semibold tracking-tight">{account.name}</span>
-              <span className="text-xs text-[#4a4f45]/70">
+              <span className="text-xs text-ink/50">
                 {loadingKey === account.key ? t("accountPicker.loading") : t("accountPicker.select")}
               </span>
             </button>
@@ -89,7 +92,7 @@ export function AccountPickerStep({
         <button
           type="button"
           onClick={onBack}
-          className="mt-10 text-xs text-[#4a4f45]/60 underline decoration-[#4a4f45]/30 underline-offset-2 hover:text-[#2a2f28]"
+          className="mt-10 text-xs text-ink/50 underline decoration-ink/20 underline-offset-2 hover:text-ink"
         >
           {t("accountPicker.back")}
         </button>

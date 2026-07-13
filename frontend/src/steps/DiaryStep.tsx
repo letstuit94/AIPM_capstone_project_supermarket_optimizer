@@ -10,6 +10,7 @@ import {
   ApiError,
 } from "@/lib/api";
 import type { PantryItem, ConsumptionLogEntry } from "@/types/api";
+import { CATEGORY_ICON } from "@/steps/PantryStep";
 
 // "Tagebuch" — menu restructure: split out of the old combined Pantry
 // page. This is the day-by-day "what did I actually eat" flow;
@@ -106,9 +107,14 @@ function PantryPickRow({
     }
   }
 
+  const icon = CATEGORY_ICON[(item.category as keyof typeof CATEGORY_ICON) ?? "other"] ?? CATEGORY_ICON.other;
+
   return (
-    <li className="flex items-center justify-between gap-4 px-5 py-4">
-      <div className="min-w-0">
+    <li className="flex items-center gap-3 px-5 py-4">
+      <span aria-hidden className="shrink-0 text-lg">
+        {icon}
+      </span>
+      <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium tracking-tight">{item.normalized_name}</p>
         <p className="truncate text-xs text-ink/50">
           {item.quantity_available} {item.unit ?? ""} {t("pantry.quantityLabel").toLowerCase()}

@@ -321,7 +321,7 @@ function BotAvatar() {
   return (
     <span
       aria-hidden
-      className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#7c9a6a] text-sm ring-2 ring-white"
+      className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent text-sm ring-2 ring-white"
     >
       🌱
     </span>
@@ -595,8 +595,8 @@ export function ChatOnboardingStep({
         <span className="inline-block rounded-full bg-zinc-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-ink/50">
           {BADGE_LABEL[lang]}
         </span>
-        <h1 className="mx-auto max-w-xl text-balance font-serif text-2xl font-bold leading-tight tracking-tight text-ink sm:text-3xl">
-          {TITLE_LINE_1[lang]} <em className="text-[#7c9a6a]">{TITLE_LINE_2[lang]}</em>
+        <h1 className="mx-auto max-w-xl text-balance text-2xl font-bold leading-tight tracking-tight text-ink sm:text-3xl">
+          {TITLE_LINE_1[lang]} <span className="text-accent">{TITLE_LINE_2[lang]}</span>
         </h1>
       </header>
 
@@ -611,7 +611,7 @@ export function ChatOnboardingStep({
             </div>
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
               <div
-                className="h-full rounded-full bg-[#7c9a6a] transition-all"
+                className="h-full rounded-full bg-accent transition-all"
                 style={{ width: `${progressPct}%` }}
               />
             </div>

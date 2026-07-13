@@ -149,7 +149,7 @@ function App() {
           <ConsentBanner onAccept={handleConsent} />
         ) : (
           <>
-            {step === "notifications" ? <NotificationsStep /> : null}
+            {step === "notifications" ? <NotificationsStep profileId={profileId} /> : null}
 
             {step === "onboarding" ? (
               <ChatOnboardingStep
