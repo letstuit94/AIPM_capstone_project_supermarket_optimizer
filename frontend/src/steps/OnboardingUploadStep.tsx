@@ -32,19 +32,36 @@ export function OnboardingUploadStep({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<UploadReceiptResponse | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [multiSummary, setMultiSummary] = useState<{ ok: number; total: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { t } = useLanguage();
 
-  async function handleFile(file: File) {
+  // E3-S1: each selected file is uploaded as its own receipt. We proceed
+  // with the first that parsed; any that failed are summarized, never
+  // silently dropped.
+  async function handleFiles(files: File[]) {
+    if (!files.length) return;
     setLoading(true);
     setError(null);
+    setMultiSummary(null);
+    setProgress(files.length > 1 ? { done: 0, total: files.length } : null);
     try {
-      const res = await uploadReceiptFile(file);
-      setResult(res);
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : t("upload.uploadFailed"));
+      const results = await uploadReceiptFiles(files, (done, total) =>
+        setProgress(total > 1 ? { done, total } : null),
+      );
+      const firstOk = results.find((r) => r.ok);
+      const okCount = results.filter((r) => r.ok).length;
+      if (firstOk?.response) {
+        setResult(firstOk.response);
+        if (results.length > 1) setMultiSummary({ ok: okCount, total: results.length });
+      } else {
+        const failed = results.find((r) => !r.ok);
+        setError(t(failed?.errorKey ?? "upload.uploadFailed"));
+      }
     } finally {
       setLoading(false);
+      setProgress(null);
     }
   }
 
@@ -56,7 +73,7 @@ export function OnboardingUploadStep({
       const res = await uploadReceiptText(pastedText);
       setResult(res);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : t("upload.uploadFailed"));
+      setError(e instanceof ApiError ? t(receiptErrorKey(e)) : t("upload.uploadFailed"));
     } finally {
       setLoading(false);
     }
@@ -123,6 +140,13 @@ export function OnboardingUploadStep({
           ))}
         </div>
 
+        <div className="rounded-2xl bg-zinc-50 px-4 py-3 ring-1 ring-black/5">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-ink/40">
+            {t("upload.disclaimerTitle")}
+          </p>
+          <p className="mt-1 text-xs text-ink/60">{t("upload.disclaimerBody")}</p>
+        </div>
+
         {mode === "image" ? (
           <div
             onDragOver={(e) => {
@@ -133,8 +157,8 @@ export function OnboardingUploadStep({
             onDrop={(e) => {
               e.preventDefault();
               setDragOver(false);
-              const file = e.dataTransfer.files?.[0];
-              if (file) handleFile(file);
+              const files = Array.from(e.dataTransfer.files ?? []);
+              if (files.length) handleFiles(files);
             }}
             onClick={() => fileInputRef.current?.click()}
             role="button"
@@ -147,18 +171,23 @@ export function OnboardingUploadStep({
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept={ACCEPT}
+              multiple
               className="hidden"
               onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFile(file);
+                const files = Array.from(e.target.files ?? []);
+                if (files.length) handleFiles(files);
               }}
             />
             <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-white ring-1 ring-black/5">
               <span className="text-lg text-ink/60">↑</span>
             </div>
             <p className="text-sm font-medium tracking-tight">
-              {loading ? t("upload.dropUploading") : t("upload.dropTitle")}
+              {loading
+                ? progress
+                  ? t("upload.progress").replace("{done}", String(progress.done)).replace("{total}", String(progress.total))
+                  : t("upload.dropUploading")
+                : t("upload.dropTitle")}
             </p>
             <p className="mt-1 text-xs text-ink/50">{t("upload.dropHint")}</p>
           </div>
@@ -197,9 +226,17 @@ export function OnboardingUploadStep({
 
         {result ? (
           <div className="space-y-4 border-t border-black/5 pt-4">
+            {multiSummary ? (
+              <p className="rounded-xl bg-emerald-50 px-3 py-2 text-xs text-emerald-700 ring-1 ring-emerald-200">
+                {t("upload.multiDone")
+                  .replace("{ok}", String(multiSummary.ok))
+                  .replace("{total}", String(multiSummary.total))}
+              </p>
+            ) : null}
             <div className="flex items-center justify-between">
               <SectionLabel>
-                {result.parsed.store} ({result.parsed.scan_quality})
+                {result.parsed.store}
+                {result.parsed.date ? ` · ${result.parsed.date}` : ""} ({result.parsed.scan_quality})
               </SectionLabel>
               <span className="text-xs text-ink/40">
                 {result.parsed.items_count} {t("upload.itemsSuffix")}
@@ -209,6 +246,11 @@ export function OnboardingUploadStep({
               {result.parsed.items.map((item, i) => (
                 <li key={i} className="text-sm text-ink/70">
                   · {item.name}
+                  <span className="ml-1 text-xs text-ink/40">
+                    {item.quantity}
+                    {item.unit ? ` ${item.unit}` : ""}
+                    {item.price != null ? ` · ${item.price.toFixed(2)} €` : ""}
+                  </span>
                   {item.uncertain ? (
                     <span className="ml-1 text-[10px] uppercase tracking-widest text-ink/35">
                       {t("upload.uncertainTag")}
