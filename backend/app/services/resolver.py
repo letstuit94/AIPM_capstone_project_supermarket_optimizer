@@ -254,14 +254,15 @@ def _learned(item: dict, name: str) -> Optional[MatchedProduct]:
     if not hit:
         return None
     nut = NutritionValues(**hit["nutrition"]) if hit.get("nutrition") else None
+    conf = float(hit.get("confidence", 1.0))  # 1.0 exact (key,store); 0.9 store-agnostic
     return MatchedProduct(
         parsed_item_name=name,
         matched_name=hit.get("matched_name"),
         off_id=hit.get("off_id"),
         bls_code=hit.get("bls_code"),
         match_type=MatchType.LEARNED,
-        confidence=1.0,
-        identity_conf=1.0,
+        confidence=conf,
+        identity_conf=conf,
         nutrition_conf=1.0,
         data_source="verified match",
         nutrition=nut,

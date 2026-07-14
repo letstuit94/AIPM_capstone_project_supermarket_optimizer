@@ -61,6 +61,26 @@ export interface ReceiptItemUpdate {
   category?: string;
 }
 
+// E5-S2: a candidate from the OFF or BLS manual search (nutrition-bearing only).
+export interface ProductSearchResult {
+  source: "off" | "bls";
+  off_id?: string | null;
+  bls_code?: string | null;
+  name: string;
+  brand?: string | null;
+  nutrition: Record<string, unknown>;
+}
+
+// E5-S3: the user's manual product pick, written as a verified-match vote.
+export interface ItemMatchPick {
+  source: "off" | "bls";
+  matched_name: string;
+  off_id?: string | null;
+  bls_code?: string | null;
+  nova?: number | null;
+  nutrition?: Record<string, unknown> | null;
+}
+
 // --- Epic 3: Profile -------------------------------------------------
 
 export type Goal =

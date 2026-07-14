@@ -40,6 +40,21 @@ class ParsedReceipt(BaseModel):
     error: Optional[str] = None
 
 
+class ReceiptItemMatch(BaseModel):
+    """
+    A user's manual product pick for a receipt item (E5-S3). Sent from the
+    review search UI when the user selects an OFF or BLS candidate; the item
+    is repointed to it and a verified-match vote is written (R-WRITE).
+    """
+
+    source: str  # "off" | "bls"
+    matched_name: str
+    off_id: Optional[str] = None
+    bls_code: Optional[str] = None
+    nova: Optional[float] = None
+    nutrition: Optional[dict] = None
+
+
 class ReceiptItemUpdate(BaseModel):
     """
     Fields a user may correct on a parsed item during review (Story 1.3).

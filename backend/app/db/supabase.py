@@ -395,3 +395,60 @@ def get_feedback_by_user(user_id: str):
         print(f"[db] 'feedback' table missing (migration pending?) — returning no feedback")
         return []
     return result.data
+
+# ── Verified-match store (Epic 5, Tier-0) ────────────────────────────────
+# Used only when the local JSON dev-store is off (services/verified_matches.py).
+# All tolerant: an unmigrated DB degrades to "no learned matches" rather than
+# 500-ing, matching every other flow's migration-window safety net.
+
+def get_verified_votes(key: str):
+    """Every vote row for a normalized match key (across stores)."""
+
+    try:
+        result = supabase.table("verified_matches").select("*").eq("key", key).execute()
+    except APIError as e:
+        if e.code != _MISSING_TABLE_CODE:
+            raise
+        return []
+    return result.data
+
+
+def upsert_verified_vote(vote: dict):
+    """Insert or replace this user's vote for (key, store, user_id).
+    Requires a unique constraint on those three columns (see migration)."""
+
+    try:
+        return (
+            supabase.table("verified_matches")
+            .upsert(vote, on_conflict="key,store,user_id")
+            .execute()
+        )
+    except APIError as e:
+        if e.code != _MISSING_TABLE_CODE:
+            raise
+        print("[db] 'verified_matches' table missing (migration pending?) — vote dropped")
+        return None
+
+
+def log_no_match_row(entry: dict):
+    """Increment the no-match frequency for (key, store), or insert it."""
+
+    key, store = entry.get("key"), entry.get("store") or ""
+    try:
+        existing = (
+            supabase.table("no_match_queue")
+            .select("*").eq("key", key).eq("store", store).execute()
+        ).data
+        if existing:
+            row = existing[0]
+            return (
+                supabase.table("no_match_queue")
+                .update({"count": (row.get("count") or 1) + 1})
+                .eq("id", row["id"]).execute()
+            )
+        return supabase.table("no_match_queue").insert({**entry, "count": 1}).execute()
+    except APIError as e:
+        if e.code != _MISSING_TABLE_CODE:
+            raise
+        print("[db] 'no_match_queue' table missing (migration pending?) — not logged")
+        return None
