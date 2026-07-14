@@ -110,14 +110,20 @@ function MultiChips({
   );
 }
 
-export function ProfileSummary({ profileId }: { profileId: string }) {
+export function ProfileSummary({
+  profileId,
+  onLogout,
+}: {
+  profileId: string;
+  onLogout: () => void;
+}) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const { language, setLanguage, t } = useLanguage();
+  const { language, t } = useLanguage();
   const lang: Lang = language;
 
   async function load() {
@@ -149,7 +155,6 @@ export function ProfileSummary({ profileId }: { profileId: string }) {
       const updated = await updateProfile(profileId, buildPatch(draft));
       setProfile(updated);
       setDraft(toDraft(updated));
-      if (typeof draft.language === "string" && draft.language) setLanguage(draft.language as Lang);
       setSaved(true);
     } catch (e) {
       setSaveError(e instanceof ApiError ? e.message : t("profile.saveFailed"));
@@ -170,9 +175,21 @@ export function ProfileSummary({ profileId }: { profileId: string }) {
   return (
     <section className="space-y-8 px-6 pb-16">
       <header className="space-y-2">
-        <p className="text-xs font-medium uppercase tracking-widest text-ink/40">{t("profile.step")}</p>
+        <div className="flex items-start justify-between gap-4">
+          <p className="text-xs font-medium uppercase tracking-widest text-ink/40">{t("profile.step")}</p>
+          <button
+            type="button"
+            onClick={onLogout}
+            className="shrink-0 rounded-full px-3 py-1.5 text-xs font-medium tracking-tight text-ink/50 ring-1 ring-black/10 transition-colors hover:bg-zinc-50 hover:text-ink"
+          >
+            {t("profile.logout")}
+          </button>
+        </div>
         <h1 className="text-balance text-4xl font-medium leading-none tracking-tight">{t("profile.title")}</h1>
         <p className="max-w-[56ch] text-pretty text-base text-ink/60">{t("profile.body")}</p>
+        <p className="font-mono text-[11px] text-ink/35">
+          {t("profile.userId")}: {profileId}
+        </p>
       </header>
 
       {loadError ? (

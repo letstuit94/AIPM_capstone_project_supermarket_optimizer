@@ -12,17 +12,94 @@ export type Lang = "en" | "de";
 const LANGUAGE_KEY = "nutriwise.language";
 
 const STRINGS: Record<string, { en: string; de: string }> = {
+  // Landing / demo entry point (LandingStep.tsx)
+  "landing.badge": { en: "A NUTRITION COACH, ON AUTOPILOT", de: "EIN ERNÄHRUNGS-COACH, IM HINTERGRUND" },
+  "landing.titleLine1": { en: "Your nutrition,", de: "Deine Ernährung," },
+  "landing.titleLine2": { en: "actually understood.", de: "endlich verstanden." },
+  "landing.body": {
+    en: "NutriWise reads your grocery receipts and compares them to what your body actually needs — iron, protein, calcium, calories. Confirm what you really ate in seconds each day, and your coach gets sharper every week.",
+    de: "NutriWise liest deine Kassenbons und vergleicht sie mit deinem tatsächlichen Bedarf — Eisen, Protein, Calcium, Kalorien. Bestätige in Sekunden, was du wirklich gegessen hast, und dein Coach wird jede Woche treffsicherer.",
+  },
+  "landing.registerCta": { en: "New here? Get started", de: "Neu hier? Jetzt starten" },
+  "landing.loginCta": {
+    en: "I already have an account — go to dashboard",
+    de: "Ich habe schon ein Konto — weiter zum Dashboard",
+  },
+  "landing.subtext": { en: "Takes about 90 seconds. No credit card needed.", de: "Dauert ca. 90 Sekunden. Keine Kreditkarte nötig." },
+  "landing.imageCaption": {
+    en: "Fresh, whole ingredients — the same ones your gap analysis is built on.",
+    de: "Frische, unverarbeitete Lebensmittel — dieselben, auf denen deine Bedarfsanalyse basiert.",
+  },
+
+  // Account picker (AccountPickerStep.tsx) — demo-only, see file docstring
+  "accountPicker.title": { en: "Whose account is this?", de: "Wessen Konto ist das?" },
+  "accountPicker.body": {
+    en: "Demo accounts for this presentation. Pick one to load its saved data.",
+    de: "Demo-Konten für diese Präsentation. Wähle eins, um dessen gespeicherte Daten zu laden.",
+  },
+  "accountPicker.select": { en: "Select", de: "Auswählen" },
+  "accountPicker.loading": { en: "Loading…", de: "Wird geladen…" },
+  "accountPicker.loadFailed": { en: "Could not load this account.", de: "Konto konnte nicht geladen werden." },
+  "accountPicker.back": { en: "Back", de: "Zurück" },
+
   // Nav / shell
-  "nav.onboarding": { en: "Onboarding", de: "Onboarding" },
+  // Menu restructure: Dashboard + Results merged into one "Overview" home
+  // (nav.results relabeled); Upload merged into Pantry ("Lager" stays);
+  // the day-log/diary half of the old Pantry page split out into its own
+  // "Tagebuch" destination. "Review" and "Upload" are no longer nav
+  // pills — Review is still a real, reachable step (right after an
+  // upload), just not a permanent menu destination; Upload's UI now
+  // lives inside Pantry itself.
   "nav.userProfile": { en: "My Profile", de: "Nutzerprofil" },
-  "nav.upload": { en: "Upload", de: "Hochladen" },
-  "nav.review": { en: "Review", de: "Prüfen" },
-  "nav.results": { en: "Results", de: "Ergebnisse" },
+  "nav.pantry": { en: "My Pantry", de: "Vorrat" },
+  "nav.results": { en: "Insights", de: "Analyse" },
+  "nav.diary": { en: "My Day", de: "Tag" },
+  "nav.notifications": { en: "Notifications", de: "Mitteilungen" },
   "footer.tagline": {
     en: "NutriWise · estimated from your shopping habits, not actual intake",
     de: "NutriWise · geschätzt aus deinem Einkaufsverhalten, nicht dem tatsächlichen Verzehr",
   },
-  "footer.deleteData": { en: "Delete my data", de: "Meine Daten löschen" },
+  "footer.deleteData": { en: "Delete or reset my data", de: "Daten löschen oder zurücksetzen" },
+  "footer.deleteConfirm": {
+    en: "Delete the receipt and profile stored for this session? This can't be undone.",
+    de: "Kassenbon und Profil dieser Sitzung löschen? Das kann nicht rückgängig gemacht werden.",
+  },
+  "footer.deleteFailed": { en: "Could not delete your data.", de: "Daten konnten nicht gelöscht werden." },
+  "review.uploadFirst": { en: "Upload a receipt first.", de: "Lade zuerst einen Kassenbon hoch." },
+  "review.goToPantry": { en: "Go to pantry", de: "Zum Lager" },
+  "footer.privacy": { en: "Privacy policy", de: "Datenschutz" },
+  "footer.imprint": { en: "Imprint", de: "Impressum" },
+  "footer.help": { en: "Help & FAQ", de: "Hilfe & FAQ" },
+  "footer.placeholderNotice": {
+    en: "Not built for this demo yet.",
+    de: "Für diese Demo noch nicht gebaut.",
+  },
+
+  // Notifications (NotificationsStep.tsx) — built from real signals
+  // already computed elsewhere (pantry reminder, coach message, weekly
+  // trend, latest receipt status), no separate backend endpoint.
+  "notifications.title": { en: "Notifications", de: "Mitteilungen" },
+  "notifications.body": {
+    en: "Reminders and insights from your coach, all in one place.",
+    de: "Erinnerungen und Erkenntnisse deines Coaches, an einem Ort.",
+  },
+  "notifications.markAllRead": { en: "Mark all as read", de: "Alle als gelesen markieren" },
+  "notifications.empty": { en: "You're all caught up.", de: "Du bist auf dem neuesten Stand." },
+  "notifications.loading": { en: "Loading…", de: "Wird geladen…" },
+  "notifications.loadFailed": { en: "Could not load your notifications.", de: "Mitteilungen konnten nicht geladen werden." },
+  "notifications.reminderTitle": {
+    en: "You haven't confirmed your pantry in a while.",
+    de: "Du hast dein Lager länger nicht bestätigt.",
+  },
+  "notifications.reminderDetail": {
+    en: "{days} days since your last confirmation — estimates are getting less accurate.",
+    de: "{days} Tage seit deiner letzten Bestätigung — Schätzungen werden ungenauer.",
+  },
+  "notifications.insightTitle": { en: "New insight from your coach", de: "Neue Erkenntnis von deinem Coach" },
+  "notifications.progressTitle": { en: "This week's trend", de: "Trend diese Woche" },
+  "notifications.receiptTitle": { en: "Your latest receipt", de: "Dein letzter Kassenbon" },
+  "notifications.receiptProcessed": { en: "Analyzed and added to your pantry.", de: "Analysiert und ins Lager übernommen." },
+  "notifications.receiptUploaded": { en: "Uploaded, analysis in progress.", de: "Hochgeladen, Analyse läuft." },
 
   // Consent banner
   "consent.badge": { en: "Before you start", de: "Bevor es losgeht" },
@@ -40,8 +117,8 @@ const STRINGS: Record<string, { en: string; de: string }> = {
     de: "Dein Kassenbon und deine Profilangaben werden nur zur Erstellung dieser Empfehlung verarbeitet.",
   },
   "consent.bullet3": {
-    en: 'You can permanently delete your receipt and profile at any time via "Delete my data" in the footer.',
-    de: 'Du kannst deinen Kassenbon und dein Profil jederzeit über "Meine Daten löschen" im Footer dauerhaft löschen.',
+    en: 'You can permanently delete your receipt and profile at any time via "Delete or reset my data" in the footer.',
+    de: 'Du kannst deinen Kassenbon und dein Profil jederzeit über "Daten löschen oder zurücksetzen" im Footer dauerhaft löschen.',
   },
   "consent.bullet4": { en: "Nothing is shared with third parties.", de: "Es wird nichts an Dritte weitergegeben." },
   "consent.accept": { en: "I understand, continue", de: "Verstanden, weiter" },
@@ -68,6 +145,8 @@ const STRINGS: Record<string, { en: string; de: string }> = {
     de: "Schließe zuerst das Onboarding ab — danach erscheinen deine Antworten hier zur Bearbeitung.",
   },
   "profile.goToOnboarding": { en: "Go to onboarding", de: "Zum Onboarding" },
+  "profile.userId": { en: "User ID", de: "Nutzer-ID" },
+  "profile.logout": { en: "Log out", de: "Abmelden" },
 
   // Upload step
   "upload.step": { en: "Step 3 · Receipt", de: "Schritt 3 · Kassenbon" },
@@ -92,6 +171,24 @@ const STRINGS: Record<string, { en: string; de: string }> = {
   "upload.itemsSuffix": { en: "items", de: "Artikel" },
   "upload.uncertainTag": { en: "uncertain", de: "unsicher" },
   "upload.reviewButton": { en: "Review items →", de: "Artikel prüfen →" },
+
+  // Onboarding baseline upload (OnboardingUploadStep.tsx) — deliberately
+  // separate copy from the generic "upload" namespace above: this is the
+  // chat's continuation, not the standalone re-upload page.
+  "onboardingUpload.progressProfile": { en: "Profile", de: "Profil" },
+  "onboardingUpload.progressReceipt": { en: "Baseline receipt", de: "Baseline-Kassenbon" },
+  "onboardingUpload.badge": { en: "ALMOST THERE", de: "GLEICH GESCHAFFT" },
+  "onboardingUpload.titleLine1": { en: "One last thing —", de: "Eine letzte Sache —" },
+  "onboardingUpload.titleLine2": { en: "your baseline.", de: "deine Baseline." },
+  "onboardingUpload.greetingWithName": {
+    en: "Great, {name}! Upload your first receipt so I can see what's already in your kitchen — this becomes the baseline everything else compares against.",
+    de: "Perfekt, {name}! Lade deinen ersten Kassenbon hoch, damit ich sehe, was bei dir schon in der Küche steht — das wird die Baseline, mit der alles Weitere verglichen wird.",
+  },
+  "onboardingUpload.greeting": {
+    en: "Upload your first receipt so I can see what's already in your kitchen — this becomes the baseline everything else compares against.",
+    de: "Lade deinen ersten Kassenbon hoch, damit ich sehe, was bei dir schon in der Küche steht — das wird die Baseline, mit der alles Weitere verglichen wird.",
+  },
+  "onboardingUpload.skip": { en: "I'll do this later", de: "Das mache ich später" },
 
   // Review step
   "review.step": { en: "Step 4 · Review", de: "Schritt 4 · Prüfen" },
@@ -119,14 +216,39 @@ const STRINGS: Record<string, { en: string; de: string }> = {
   "review.rawPrefix": { en: "raw:", de: "roh:" },
   "review.uncategorized": { en: "uncategorized", de: "unkategorisiert" },
 
-  // Results step
-  "results.step": { en: "Step 5 · Results", de: "Schritt 5 · Ergebnisse" },
+  // Results step — now also the merged "Overview"/home page (formerly
+  // DashboardStep.tsx's mockup): greeting, inactivity reminder, and the
+  // trend/recipe cards promoted out of the details-only section below.
+  "results.step": { en: "Overview", de: "Übersicht" },
   "results.title": { en: "Your basket, aggregated.", de: "Dein Einkaufskorb, zusammengefasst." },
   "results.body": {
     en: "Combines every receipt you've uploaded so far — not just the last one.",
     de: "Fasst alle bisher hochgeladenen Kassenbons zusammen — nicht nur den letzten.",
   },
   "results.refresh": { en: "Refresh", de: "Aktualisieren" },
+  "results.greetingFallback": { en: "Welcome back", de: "Willkommen zurück" },
+  "results.reminderText": {
+    en: "You haven't confirmed anything in {days} days — your estimates are getting less accurate.",
+    de: "Du hast seit {days} Tagen nichts bestätigt — deine Schätzungen werden ungenauer.",
+  },
+  "results.reminderCta": { en: "Confirm now", de: "Jetzt bestätigen" },
+  "results.noDataNotice": {
+    en: "No data yet — upload your first receipt to see your Insights.",
+    de: "Noch keine Daten — lade deinen ersten Kassenbon hoch, um deine Insights zu sehen.",
+  },
+  "results.noDataCta": { en: "Upload a receipt", de: "Kassenbon hochladen" },
+  "results.noDataPlaceholderCoach": {
+    en: "I can't tell you anything yet — I need at least one receipt first.",
+    de: "Ich kann dir noch nichts sagen — dafür brauche ich zuerst mindestens einen Kassenbon.",
+  },
+  "results.noDataPlaceholderScore": {
+    en: "Appears once there's enough data.",
+    de: "Erscheint, sobald genug Daten vorhanden sind.",
+  },
+  "results.noDataPlaceholderNextCart": {
+    en: "No recommendation possible yet.",
+    de: "Noch keine Empfehlung möglich.",
+  },
   "results.loading": { en: "Loading…", de: "Wird geladen…" },
   "results.loadFailed": { en: "Failed to load results.", de: "Ergebnisse konnten nicht geladen werden." },
   "results.basedOnPrefix": { en: "Based on", de: "Basierend auf" },
@@ -139,6 +261,8 @@ const STRINGS: Record<string, { en: string; de: string }> = {
   "results.topGaps": { en: "Top gaps", de: "Wichtigste Lücken" },
   "results.candidatesChecked": { en: "candidates checked", de: "Kandidaten geprüft" },
   "results.candidatesConsidered": { en: "candidates considered", de: "Kandidaten berücksichtigt" },
+  "results.nextCart": { en: "Next Cart", de: "Nächster Einkauf" },
+  "results.feedbackLabel": { en: "Feedback", de: "Feedback" },
   "results.whyNothing": { en: "Why nothing was suggested", de: "Warum nichts vorgeschlagen wurde" },
   "results.allowed": { en: "allowed", de: "erlaubt" },
   "results.blocked": { en: "blocked:", de: "blockiert:" },
@@ -160,10 +284,117 @@ const STRINGS: Record<string, { en: string; de: string }> = {
   "results.trend.insufficient_data": { en: "insufficient data", de: "zu wenig Daten" },
   "results.improved": { en: "improved", de: "verbessert" },
   "results.worse": { en: "worse", de: "verschlechtert" },
+  "results.absoluteGaps": { en: "Nutrient gaps (Bedarf vs. Ist)", de: "Nährstoff-Lücken (Bedarf vs. Ist)" },
+  "results.nutrientStatus": { en: "Nutrient status", de: "Nährstoff-Status" },
+  "results.showDetails": { en: "Show details", de: "Details anzeigen" },
+  "results.hideDetails": { en: "Hide details", de: "Details ausblenden" },
+  "results.absoluteGapsNoneFound": {
+    en: "Nothing flagged — your confirmed eating looks on track across every tracked nutrient.",
+    de: "Nichts auffällig — dein bestätigter Konsum sieht bei allen erfassten Nährstoffen gut aus.",
+  },
+  "results.absoluteGapsNoData": {
+    en: "Not enough data yet — confirm what you've eaten in your pantry to see this.",
+    de: "Noch nicht genug Daten — bestätige im Lager, was du gegessen hast, um das zu sehen.",
+  },
+  "results.pantryRecipes": { en: "Recipes from your pantry", de: "Rezepte aus deinem Lager" },
+  "results.logInDiary": { en: "Log in Diary →", de: "Im Tagebuch eintragen →" },
+  "results.viewInsights": { en: "View Insights →", de: "Insights ansehen →" },
+  "results.healthScore": { en: "Health score", de: "Health Score" },
+  "results.healthScore.great": { en: "great", de: "sehr gut" },
+  "results.healthScore.good": { en: "good", de: "gut" },
+  "results.healthScore.needs_improvement": { en: "needs improvement", de: "ausbaufähig" },
+  "results.healthScore.poor": { en: "poor", de: "schwach" },
+  "results.easySwaps": { en: "Easy changes to add", de: "Einfache Ergänzungen" },
+  "results.targets": { en: "targets", de: "wirkt gegen" },
+  "results.cost.low": { en: "low cost", de: "günstig" },
+  "results.cost.medium": { en: "medium cost", de: "mittel" },
+  "results.cost.high": { en: "higher cost", de: "teurer" },
+  "results.conflicts": { en: "Worth double-checking", de: "Lohnt sich nachzufragen" },
+  "results.conflictsIntro": {
+    en: "These purchases don't match what you told us about your diet — did something change, or was this for someone else?",
+    de: "Diese Einkäufe passen nicht zu deinen Angaben zur Ernährung — hat sich etwas geändert, oder war das für jemand anderen?",
+  },
+  "results.conflictChanged": { en: "My diet changed — update profile", de: "Hat sich geändert — Profil bearbeiten" },
+  "results.conflictSomeoneElse": { en: "Was for someone else", de: "War für jemand anderen" },
+  "results.absoluteProgress": { en: "This week vs. last week", de: "Diese Woche vs. letzte Woche" },
+  "results.pantryMatch": { en: "Use what you have", de: "Nutze, was du hast" },
+  "results.pantryMatchUrgent": { en: "Use soon", de: "Bald verbrauchen" },
+  "results.coach": { en: "Your Nutri-Coach", de: "Dein Nutri-Coach" },
+
+  // Pantry (Lager-Bestand) page
+  // Pantry ("Lager") — menu restructure: this is now inventory + adding
+  // new receipts merged into one page. Confirming consumption day-by-day
+  // moved out into its own "Tagebuch" (diary.*, below).
+  "pantry.step": { en: "Pantry", de: "Lager" },
+  "pantry.title": { en: "What's still around.", de: "Was noch da ist." },
+  "pantry.body": {
+    en: "Every receipt adds to this list. Upload a new one below, or correct/remove what's no longer accurate.",
+    de: "Jeder Kassenbon ergänzt diese Liste. Lade unten einen neuen hoch oder korrigiere/entferne, was nicht mehr stimmt.",
+  },
+  "pantry.uploadSectionTitle": { en: "Add a new receipt", de: "Neuen Kassenbon hinzufügen" },
+  "pantry.loading": { en: "Loading…", de: "Wird geladen…" },
+  "pantry.loadFailed": { en: "Could not load your pantry.", de: "Lager konnte nicht geladen werden." },
+  "pantry.empty": {
+    en: "Nothing here yet — upload a receipt to start building your pantry.",
+    de: "Noch nichts hier — lade einen Kassenbon hoch, um dein Lager zu füllen.",
+  },
+  "pantry.consumed": { en: "Ate it", de: "Gegessen" },
+  "pantry.remove": { en: "No longer have it", de: "Nicht mehr vorhanden" },
+  "pantry.quantityLabel": { en: "Quantity", de: "Menge" },
+  "pantry.matchedGood": { en: "matched to real nutrition data", de: "echten Nährwerten zugeordnet" },
+  "pantry.matchedRough": { en: "only a rough category estimate", de: "nur eine grobe Kategorie-Schätzung" },
+  "pantry.expiresIn": { en: "expires in {days}d", de: "läuft in {days}T ab" },
+  "pantry.expiresToday": { en: "expires today", de: "läuft heute ab" },
+  "pantry.expiredAgo": { en: "expired {days}d ago", de: "seit {days}T abgelaufen" },
+  "pantry.category.dairy": { en: "Dairy", de: "Milchprodukte" },
+  "pantry.category.grain": { en: "Grains & bread", de: "Getreide & Brot" },
+  "pantry.category.vegetable": { en: "Vegetables", de: "Gemüse" },
+  "pantry.category.fruit": { en: "Fruit", de: "Obst" },
+  "pantry.category.protein": { en: "Protein", de: "Protein" },
+  "pantry.category.snack": { en: "Snacks", de: "Snacks" },
+  "pantry.category.drink": { en: "Drinks", de: "Getränke" },
+  "pantry.category.other": { en: "Other", de: "Sonstiges" },
+
+  // Diary ("Tagebuch") — day-by-day confirmation of what was actually
+  // eaten, split out of the old combined Pantry page (DiaryStep.tsx).
+  "diary.step": { en: "Diary", de: "Tagebuch" },
+  "diary.title": { en: "What did you eat?", de: "Was hast du gegessen?" },
+  "diary.body": {
+    en: "Pick from what's in your pantry, or add something that never came from a receipt.",
+    de: "Wähle aus deinem Lagerbestand, oder ergänze etwas, das nie auf einem Kassenbon stand.",
+  },
+  "diary.whyItMatters": {
+    en: "Confirming daily keeps your nutrient estimates accurate — the coach can only see what you've told it.",
+    de: "Tägliches Bestätigen hält deine Nährstoff-Schätzungen genau — der Coach sieht nur, was du ihm sagst.",
+  },
+  "diary.pickFromPantryTitle": { en: "From your pantry", de: "Aus deinem Lager" },
+  "diary.pickFromPantryEmpty": {
+    en: "Your pantry is empty — upload a receipt first, or add something manually below.",
+    de: "Dein Lager ist leer — lade zuerst einen Kassenbon hoch oder ergänze unten manuell etwas.",
+  },
+  "diary.previousDay": { en: "Previous day", de: "Vorheriger Tag" },
+  "diary.nextDay": { en: "Next day", de: "Nächster Tag" },
+  "diary.today": { en: "Today", de: "Heute" },
+  "diary.dayLogTitle": { en: "Logged for this day", de: "Für diesen Tag erfasst" },
+  "diary.manualLogTitle": { en: "Add something else", de: "Sonstiges hinzufügen" },
+  "diary.manualLogBody": {
+    en: "Food that never came from a receipt — a restaurant meal, a snack bought elsewhere.",
+    de: "Lebensmittel, die nie auf einem Kassenbon standen — z. B. ein Restaurant-Essen oder ein Snack unterwegs.",
+  },
+  "diary.manualLogNamePlaceholder": { en: "What did you eat?", de: "Was hast du gegessen?" },
+  "diary.manualLogAdd": { en: "Add", de: "Hinzufügen" },
 };
 
 export function t(key: string, lang: Lang): string {
   return STRINGS[key]?.[lang] ?? key;
+}
+
+// For the rare spot outside a component (native `confirm`/`alert`
+// dialogs in App.tsx, which fire from a plain event handler, not
+// render) that needs the current language without the `useLanguage`
+// hook — same localStorage read LanguageProvider itself uses below.
+export function getStoredLanguage(): Lang {
+  return (localStorage.getItem(LANGUAGE_KEY) as Lang | null) ?? "en";
 }
 
 interface LanguageContextValue {

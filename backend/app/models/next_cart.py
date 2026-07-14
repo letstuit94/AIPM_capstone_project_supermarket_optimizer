@@ -17,6 +17,38 @@ class Recipe(BaseModel):
     prep_minutes: Optional[int] = None
 
 
+class EasySwap(BaseModel):
+    """
+    One easy, low-effort addition/swap suggestion — cheap, quick, few
+    ingredients, in season — as opposed to the single Next Cart pick
+    above. Several of these can be shown together (see
+    services/easy_swaps.py), unlike the one deliberate Next Cart choice.
+    """
+
+    item: str
+    targets_gap: str
+    cost: str  # "low" | "medium" | "high"
+    rationale: str
+
+
+class PantryMatch(BaseModel):
+    """
+    "Use what you already have" — a pantry item that already targets an
+    open gap, shown ALONGSIDE (not instead of) the Next Cart purchase
+    pick below, so the user can choose either (docs/architektur_entscheidungen.md,
+    ToDo 2). `urgent` is set when the item is expiring soon or already
+    past its estimated shelf life (services/shelf_life.py) — still
+    suggested, never hidden, since "abgelaufen" doesn't mean "unusable",
+    just "use it now or throw it out".
+    """
+
+    item: str
+    targets_gap: str
+    days_until_expiry: Optional[int] = None
+    urgent: bool
+    message: str
+
+
 class ActionType(str, Enum):
     ADD = "add"
     REPLACE = "replace"

@@ -223,6 +223,26 @@ def update_profile_row(profile_id: str, fields: dict):
     return _update_tolerant("profiles", profile_id, fields)
 
 
+def get_profile_by_session(session_id: str):
+    """
+    Most recently created profile tagged with this session_id (demo
+    account picker groundwork — see api/profile.py's `/profile/by-session`).
+    None if this session has never completed onboarding yet, which is a
+    normal state (not an error): the caller creates a fresh profile under
+    the same session_id in that case.
+    """
+
+    result = (
+        supabase.table("profiles")
+        .select("*")
+        .eq("session_id", session_id)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    return result.data[0] if result.data else None
+
+
 def delete_profile(profile_id: str):
     """Hard-delete a profile (GDPR: user-initiated erasure, Story 7.3)."""
 
@@ -335,6 +355,25 @@ def get_feedback_by_recommendation(recommendation_id: str):
             .select("*")
             .eq("recommendation_id", recommendation_id)
             .order("created_at", desc=True)
+            .execute()
+        )
+    except APIError as e:
+        if e.code != _MISSING_TABLE_CODE:
+            raise
+        print(f"[db] 'feedback' table missing (migration pending?) — returning no feedback")
+        return []
+    return result.data
+
+
+def get_feedback_by_session(session_id: str):
+    """Every feedback row this session has ever submitted (P1.1 groundwork, preference re-weighting)."""
+
+    try:
+        result = (
+            supabase.table("feedback")
+            .select("*")
+            .eq("session_id", session_id)
+            .order("created_at")
             .execute()
         )
     except APIError as e:

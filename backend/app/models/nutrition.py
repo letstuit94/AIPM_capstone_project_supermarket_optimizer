@@ -27,6 +27,8 @@ class NutritionValues(BaseModel):
     sugar_g: Optional[float] = None
     calories_kcal: Optional[float] = None
     processed_score: Optional[float] = None
+    iron_mg: Optional[float] = None
+    calcium_mg: Optional[float] = None
 
 
 class MatchedProduct(BaseModel):

@@ -4,11 +4,24 @@ Nutrition dimension definitions & scoring (Task 4.1).
 The MVP judges a basket by day-agnostic density ratios rather than
 absolute daily totals (receipts carry no "how many days" information):
 
-  - fiber   : grams per 1000 kcal        (IOM/DGE reference ~14 g/1000 kcal)
-  - protein : grams per 1000 kcal        (~25 g/1000 kcal as a low-bar)
-  - sugar   : % of energy from sugar      (WHO free-sugar guidance <10%;
-              we only have TOTAL sugars, so a looser 20% heuristic is used)
-  - processed: average NOVA score 1..4    (>2.5 leans processed)
+  - fiber   : grams per 1000 kcal        (DGE reference: >=30 g/day,
+              confirmed in its 2022 review, converted to a density —
+              see FIBER_REF_PER_1000KCAL below for the exact figure and
+              source)
+  - protein : grams per 1000 kcal        (~25 g/1000 kcal as a low-bar;
+              deliberately below DGE's ~28-34 g/1000kcal implied by its
+              0.8 g/kg reference at typical energy intakes — this fixed
+              value is a floor for the non-personalized path only, see
+              nutrition_personalization.py for the real DGE-based
+              individualized reference used whenever weight/height/age
+              are available)
+  - sugar   : % of energy from sugar      (see SUGAR_MAX_PCT_ENERGY below
+              — a heuristic working around a real data limitation, not a
+              directly-cited guideline value)
+  - processed: average NOVA score 1..4    (see PROCESSED_MAX_AVG below —
+              NOT a DGE metric; NOVA is a separate, Brazilian-origin food
+              classification framework with no official "basket average"
+              threshold in the literature)
 
 Everything here is rule-based on purpose — no ML — so the logic stays
 transparent and trustworthy for the MVP.
@@ -26,9 +39,33 @@ from backend.app.models.snapshot import (
 # References / thresholds
 # ─────────────────────────────────────────────────────────────
 
-FIBER_REF_PER_1000KCAL = 14.0     # below -> low fiber
-PROTEIN_REF_PER_1000KCAL = 25.0   # below -> low protein
+# DGE reference: >=30 g fiber/day, confirmed (not just carried over) in
+# its 2022 referenz-values review; DGE itself states this corresponds to
+# >=14.6 g/1000 kcal (3.5 g/MJ). This file previously used 14.0 — close,
+# but not the actual cited figure. Source:
+# https://www.dge.de/presse/meldungen/2022/ueberarbeitete-referenzwerte/
+FIBER_REF_PER_1000KCAL = 14.6     # below -> low fiber
+
+PROTEIN_REF_PER_1000KCAL = 25.0   # below -> low protein (see module docstring)
+
+# WHO's 2015 guidance (endorsed by a joint DGE/DAG/DDG 2018 consensus
+# paper) is <10% of energy from FREE sugar, ~50g/day at 2000 kcal —
+# https://www.dge.de/wissenschaft/stellungnahmen-und-positionspapiere/stellungnahmen/quantitative-empfehlung-zur-zuckerzufuhr-in-deutschland/
+# This app only has OFF's TOTAL sugars (includes naturally-occurring
+# sugar in whole fruit/dairy, which the free-sugar definition excludes),
+# so applying the 10% figure directly would over-flag whole-food baskets.
+# 20% is a pragmatic doubling to compensate — NOT an independently cited
+# threshold, just this app's own workaround for the data gap. If a food
+# database exposes free/added sugar directly in the future (BLS may),
+# switch back to the real 10% figure against that field instead.
 SUGAR_MAX_PCT_ENERGY = 20.0       # above -> high sugar (total-sugar heuristic)
+
+# NOVA (Monteiro et al.) classifies individual foods 1 (unprocessed) to
+# 4 (ultra-processed); it does NOT define how to average that across a
+# whole basket, and no dietary guideline (DGE or otherwise) publishes a
+# numeric "average NOVA score" cutoff. 2.5 (the scale's midpoint) is this
+# app's own simplification, not a cited value — flagged here so it isn't
+# mistaken for the same rigor as the fiber/sugar figures above.
 PROCESSED_MAX_AVG = 2.5           # above -> highly processed
 
 DISCLAIMER = (

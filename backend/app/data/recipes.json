@@ -111,6 +111,35 @@
       "title": "Baked Egg Muffins",
       "description": "Whisk eggs with vegetables and cheese, bake in a muffin tin for grab-and-go portions.",
       "prep_minutes": 25
+    },
+    {
+      "title": "Boiled Egg & Spinach Salad",
+      "description": "Toss fresh spinach with a sliced hard-boiled egg, olive oil, and lemon juice.",
+      "prep_minutes": 12
+    }
+  ],
+  "Spinat": [
+    {
+      "title": "Boiled Egg & Spinach Salad",
+      "description": "Toss fresh spinach with a sliced hard-boiled egg, olive oil, and lemon juice.",
+      "prep_minutes": 12
+    },
+    {
+      "title": "Sautéed Spinach with Garlic",
+      "description": "Wilt spinach in a hot pan with garlic and a drizzle of olive oil.",
+      "prep_minutes": 8
+    }
+  ],
+  "Rindfleisch": [
+    {
+      "title": "Pan-Seared Beef Strips",
+      "description": "Sear thin beef strips and serve over rice or vegetables.",
+      "prep_minutes": 15
+    },
+    {
+      "title": "Beef & Vegetable Stir-Fry",
+      "description": "Stir-fry beef strips with mixed vegetables and soy sauce.",
+      "prep_minutes": 20
     }
   ],
   "Ungesüßter Tee oder Wasser": [
@@ -176,6 +205,56 @@
       "title": "Whole-Grain Pasta Primavera",
       "description": "Toss whole-grain pasta with sautéed seasonal vegetables and olive oil.",
       "prep_minutes": 20
+    }
+  ],
+  "Milch": [
+    {
+      "title": "Warm Milk Overnight Oats",
+      "description": "Soak oats in milk overnight with a topping of your choice for a quick, calcium-rich breakfast.",
+      "prep_minutes": 5
+    },
+    {
+      "title": "Simple Milk-Based Smoothie",
+      "description": "Blend milk with banana and a spoon of peanut butter for a filling, calcium-rich drink.",
+      "prep_minutes": 5
+    }
+  ],
+  "Angereicherter Pflanzendrink": [
+    {
+      "title": "Fortified Oat Milk Latte",
+      "description": "Warm calcium-fortified oat milk and combine with coffee or cocoa.",
+      "prep_minutes": 5
+    },
+    {
+      "title": "Plant Milk Chia Pudding",
+      "description": "Mix chia seeds with fortified plant milk and refrigerate overnight.",
+      "prep_minutes": 5
+    }
+  ],
+  "Grünkohl": [
+    {
+      "title": "Sautéed Kale with Garlic",
+      "description": "Wilt kale in a hot pan with garlic and a drizzle of olive oil.",
+      "prep_minutes": 10
+    },
+    {
+      "title": "Kale Salad with Lemon Dressing",
+      "description": "Massage raw kale with lemon juice and olive oil, top with nuts or seeds.",
+      "prep_minutes": 10
+    }
+  ],
+  "Apfel mit Erdnussmus": [
+    {
+      "title": "Apple Slices with Peanut Butter",
+      "description": "Slice an apple and serve with a spoonful of peanut butter for dipping.",
+      "prep_minutes": 2
+    }
+  ],
+  "Reiswaffeln": [
+    {
+      "title": "Rice Cakes with Toppings",
+      "description": "Top rice cakes with peanut butter, mashed avocado, or cottage cheese for a quick snack.",
+      "prep_minutes": 2
     }
   ]
 }

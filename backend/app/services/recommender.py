@@ -27,15 +27,19 @@ from backend.app.models.profile import (
     Digestion,
 )
 from backend.app.models.snapshot import Gap, ConfidenceLevel
+from backend.app.models.absolute_gap import AbsoluteGap
 from backend.app.models.next_cart import (
     NextCartRecommendation,
     EvaluatedCandidate,
     ActionType,
     RecommendationStatus,
+    PantryMatch,
 )
 from backend.app.services.exclusion_filter import ExclusionCandidate, check_candidate
 from backend.app.services.explainer import generate_explanation
 from backend.app.services.recipe_suggester import suggest_recipes
+from backend.app.services.shelf_life import EXPIRING_SOON_WITHIN_DAYS
+from backend.app.services.preference_learning import item_preference_scores
 
 _RECOMMENDATIONS_PATH = Path(__file__).resolve().parents[1] / "data" / "recommendations.json"
 
@@ -81,17 +85,39 @@ def _candidates_for(gap: Gap) -> List[dict]:
     return RECOMMENDATIONS.get(f"{gap.dimension}:{gap.status.value}", [])
 
 
+def gap_from_absolute(absolute_gap: AbsoluteGap) -> Gap:
+    """
+    Bridge an AbsoluteGap (real daily units, e.g. mg/day iron) into the
+    Gap shape recommend_next_cart() consumes. Only the fields the
+    candidate-lookup/exclusion-filter path actually uses are carried
+    over (dimension, status, message, confidence) — current/reference
+    values keep their absolute units rather than being forced into the
+    density Gap's semantics, since nothing downstream of this bridge
+    recomputes a ratio from them.
+    """
+
+    return Gap(
+        dimension=absolute_gap.dimension,
+        status=absolute_gap.status,
+        current_value=absolute_gap.daily_estimate,
+        reference_value=absolute_gap.daily_requirement,
+        message=absolute_gap.message,
+        confidence=absolute_gap.confidence,
+    )
+
+
 # Chat onboarding Q6/Q7 (symptoms, digestion) -> which already-tracked
-# gap dimension to prioritize. Deliberately limited to dimensions this
-# app actually measures (fiber, protein, processed) — the Q6 table's
-# iron/B12/magnesium/omega-3/vitamin-D/biotin links aren't wired here
+# gap dimension to prioritize. Iron is now wired in (see
+# absolute_gap_detector.py) alongside fiber/protein/processed — the Q6
+# table's B12/magnesium/omega-3/vitamin-D/biotin links stay unwired
 # because nothing in this app's data model measures those; fabricating
-# a gap for them would violate this file's own anti-hallucination rule.
-# See models/profile.py's ProfileCreate docstring.
+# a gap for them would still violate this file's anti-hallucination
+# rule. See models/profile.py's ProfileCreate docstring.
 _SYMPTOM_PRIORITY_BOOST = {
     "muscle_weakness": {"protein"},
-    "hair_nails": {"protein"},
-    "often_cold": {"protein"},
+    "hair_nails": {"protein", "iron"},
+    "often_cold": {"protein", "iron"},
+    "fatigue": {"iron"},
 }
 _DIGESTION_PRIORITY_BOOST = {
     Digestion.BLOATED: {"fiber"},
@@ -127,10 +153,109 @@ def _prioritize_gaps(gaps: List[Gap], profile: ProfileLike) -> List[Gap]:
     return [gap for _, gap in ranked]
 
 
+def _apply_preference_scores(candidates: List[dict], scores: dict) -> List[dict]:
+    """
+    Stable-reorder a gap's fixed candidate list (highest net feedback
+    score first, table order as tiebreaker) — same pattern as
+    _prioritize_gaps above. Never adds or removes a candidate; a
+    candidate with no feedback history keeps its original position
+    relative to other zero-score candidates.
+    """
+
+    if not scores:
+        return candidates
+    ranked = sorted(
+        enumerate(candidates),
+        key=lambda pair: (-scores.get(pair[1]["item"], 0), pair[0]),
+    )
+    return [candidate for _, candidate in ranked]
+
+
+def find_pantry_match(
+    gaps: List[Gap],
+    pantry_items: List[dict],
+    profile: Optional[ProfileLike],
+    session_id: Optional[str] = None,
+) -> Optional[PantryMatch]:
+    """
+    "Use what you already have" — walk gaps worst-first (same order
+    recommend_next_cart uses), and for each gap's candidate list, check
+    whether a matching item is already in the pantry and allowed under
+    the profile's exclusions. Among matches, prefer the soonest-expiring
+    one (services/shelf_life.py) — a side benefit of reducing food waste.
+
+    Shown ALONGSIDE recommend_next_cart's purchase pick, never replacing
+    it — the user gets both and chooses (docs/architektur_entscheidungen.md,
+    ToDo 2). Already-expired items are still returned (urgent=True), not
+    hidden — "past its estimate" means "use it now or toss it", not
+    "pretend it isn't there".
+
+    session_id is optional (P1.1): when given, past feedback for this
+    session re-orders each gap's candidate list before matching against
+    the pantry, same rule-based boost as recommend_next_cart below.
+    """
+
+    if profile is None:
+        profile = default_profile()
+
+    scores = item_preference_scores(session_id) if session_id else {}
+
+    for gap in gaps:
+        matches = []
+        for candidate in _apply_preference_scores(_candidates_for(gap), scores):
+            pantry_item = pantry_items and next(
+                (i for i in pantry_items if i["normalized_name"] == candidate["item"]), None
+            )
+            if pantry_item is None:
+                continue
+            check = check_candidate(
+                profile,
+                ExclusionCandidate(name=candidate["item"], tags=candidate["tags"]),
+            )
+            if check.allowed:
+                matches.append(pantry_item)
+
+        if not matches:
+            continue
+
+        best = min(
+            matches,
+            key=lambda item: (
+                item["days_until_expiry"] if item.get("days_until_expiry") is not None else float("inf")
+            ),
+        )
+        days = best.get("days_until_expiry")
+        urgent = days is not None and days <= EXPIRING_SOON_WITHIN_DAYS
+
+        if urgent and days is not None and days < 0:
+            message = (
+                f"Your {best['normalized_name']} is past its estimated shelf life — "
+                f"use it now or toss it. It also helps your {gap.dimension} gap."
+            )
+        elif urgent:
+            message = (
+                f"Your {best['normalized_name']} is expiring soon — use it up, "
+                f"and it helps your {gap.dimension} gap too."
+            )
+        else:
+            message = f"You already have {best['normalized_name']} in your pantry — it helps your {gap.dimension} gap."
+
+        return PantryMatch(
+            item=best["normalized_name"],
+            targets_gap=gap.dimension,
+            days_until_expiry=days,
+            urgent=urgent,
+            message=message,
+        )
+
+    return None
+
+
 def recommend_next_cart(
     gaps: List[Gap],
     profile: Optional[ProfileLike],
     confidence: ConfidenceLevel,
+    session_id: Optional[str] = None,
 ) -> NextCartRecommendation:
     """
     Build the single Next Cart recommendation for this basket + profile.
@@ -138,6 +263,12 @@ def recommend_next_cart(
     Story 5.1: exactly one recommendation, framed as add/replace/reduce.
     Story 5.2: never suggests something the profile excludes; says so
     explicitly if nothing in the table fits.
+
+    session_id is optional (P1.1, rule-based preference re-weighting):
+    when given, this session's past feedback ("would you buy this?")
+    re-orders each gap's candidate list before the exclusion filter
+    runs — a liked item is preferred over an equally-valid alternative,
+    a disliked one is deprioritized but never removed outright.
     """
 
     if profile is None:
@@ -154,9 +285,10 @@ def recommend_next_cart(
 
     evaluated: List[EvaluatedCandidate] = []
     gaps = _prioritize_gaps(gaps, profile)
+    scores = item_preference_scores(session_id) if session_id else {}
 
     for gap in gaps:  # ranked worst-first by the gap detector, then Q6/Q7-boosted
-        for candidate in _candidates_for(gap):
+        for candidate in _apply_preference_scores(_candidates_for(gap), scores):
             check = check_candidate(
                 profile,
                 ExclusionCandidate(name=candidate["item"], tags=candidate["tags"]),
@@ -169,6 +301,9 @@ def recommend_next_cart(
             ))
 
             if check.allowed:
+                reasoning = [gap.message, candidate["rationale"]]
+                if scores.get(candidate["item"], 0) > 0:
+                    reasoning.append("You've responded positively to this before.")
                 return NextCartRecommendation(
                     status=RecommendationStatus.RECOMMENDED,
                     action_type=ActionType(candidate["action_type"]),
@@ -176,7 +311,7 @@ def recommend_next_cart(
                     targets_gap=gap.dimension,
                     gap_status=gap.status.value,
                     message=f"{candidate['action_type'].capitalize()}: {candidate['item']}",
-                    reasoning=[gap.message, candidate["rationale"]],
+                    reasoning=reasoning,
                     explanation=generate_explanation(gap, candidate, profile),
                     confidence=confidence,
                     evaluated_candidates=evaluated,

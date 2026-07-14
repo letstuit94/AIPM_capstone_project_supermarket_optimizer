@@ -163,14 +163,98 @@ export interface Gap {
   confidence: ConfidenceLevel;
 }
 
+// Bedarf vs. Ist, in real daily units (e.g. mg/day iron) — separate from
+// `Gap` above, which compares day-agnostic density ratios. See backend
+// models/absolute_gap.py for why these aren't merged into one shape.
+export interface AbsoluteGap {
+  dimension: string;
+  status: "low" | "high";
+  daily_estimate: number;
+  daily_requirement: number;
+  ratio: number;
+  message: string;
+  confidence: ConfidenceLevel;
+}
+
+export type HealthScoreLabel = "great" | "good" | "needs_improvement" | "poor";
+
+// One composite "how's your basket doing" number + plain-language
+// summary — rule-based, derived from the dimensions/gaps below (see
+// backend services/health_score.py), not a new fact of its own.
+export interface HealthScore {
+  value: number; // 0-100
+  label: HealthScoreLabel;
+  summary: string;
+}
+
+// A purchased item that conflicts with the profile's dietary pattern, an
+// allergy, or a dislike — see backend services/conflict_detector.py.
+// Never changes the profile itself; just surfaced so the user can
+// clarify ("did this change, or was it for someone else?").
+export interface Conflict {
+  item: string;
+  blocked_by: string;
+  blocked_by_type: "diet" | "allergy" | "dislike";
+  message: string;
+}
+
 export interface NutritionSnapshot {
   receipts_analyzed: number;
   items_analyzed: number;
   profile: NutritionProfile;
   dimensions: DimensionSnapshot[];
   gaps: Gap[];
+  // [] until the user has confirmed any pantry consumption/removal —
+  // see backend services/absolute_gap_detector.py.
+  absolute_gaps: AbsoluteGap[];
+  // Distinguishes "[] because nothing's confirmed yet" from "[] because
+  // everything's within range" — both look identical otherwise (Epic 11.1).
+  has_sufficient_data: boolean;
+  health_score: HealthScore;
+  conflicts: Conflict[];
   confidence: ConfidenceLevel;
   disclaimer: string;
+}
+
+// --- Pantry (Lager-Bestand) --------------------------------------------
+
+export interface PantryItem {
+  id: string;
+  session_id: string;
+  normalized_name: string;
+  quantity_available: number;
+  unit?: string | null;
+  category?: string | null;
+  last_replenished_at?: string | null;
+  // Computed fresh on every read from last_replenished_at + a rough
+  // per-category shelf life (see backend services/shelf_life.py) —
+  // never persisted, not food-safety guidance, just an "expiring soon" nudge.
+  estimated_expiry?: string | null;
+  days_until_expiry?: number | null;
+}
+
+export interface PantryResponse {
+  session_id: string;
+  items: PantryItem[];
+  // null if nothing's ever been confirmed — used for the "you haven't
+  // logged in a while" in-app nudge (Epic 13.1).
+  days_since_last_confirmation: number | null;
+}
+
+// One consumption event for the Tages-Log's per-day view — either a
+// normal pantry confirmation or a manual (free-text) entry.
+export interface ConsumptionLogEntry {
+  id: string;
+  session_id: string;
+  normalized_name: string;
+  quantity_consumed: number;
+  consumed_at: string;
+}
+
+export interface ConsumptionLogResponse {
+  session_id: string;
+  date: string;
+  entries: ConsumptionLogEntry[];
 }
 
 // --- Epic 5: Next Cart --------------------------------------------------
@@ -194,6 +278,28 @@ export interface Recipe {
   prep_minutes?: number | null;
 }
 
+// One easy, low-effort/cheap/in-season swap — a broader supplementary
+// list alongside the single deliberate Next Cart pick below (see
+// backend services/easy_swaps.py).
+export interface EasySwap {
+  item: string;
+  targets_gap: string;
+  cost: "low" | "medium" | "high";
+  rationale: string;
+}
+
+// "Use what you already have" — a pantry item that already targets an
+// open gap, shown ALONGSIDE (never instead of) the purchase pick below
+// so the user can choose either. `urgent` when expiring soon or already
+// past its estimated shelf life (see backend services/shelf_life.py).
+export interface PantryMatch {
+  item: string;
+  targets_gap: string;
+  days_until_expiry: number | null;
+  urgent: boolean;
+  message: string;
+}
+
 // --- Progress Tracking (integration briefing addendum) -------------------
 
 export interface DimensionDelta {
@@ -211,6 +317,10 @@ export interface ProgressReport {
   has_history: boolean;
   receipts_compared: number;
   deltas: DimensionDelta[];
+  // Bedarf-vs-Ist analog of `deltas` (iron/protein/calcium daily intake
+  // this week vs. the week before) — independent of receipt count,
+  // since it's built from confirmed pantry consumption, not receipts.
+  absolute_deltas: DimensionDelta[];
   trend: ProgressTrend;
   addressed_gap_improved: boolean | null;
   message: string;
@@ -230,6 +340,20 @@ export interface NextCartRecommendation {
   confidence: ConfidenceLevel;
   evaluated_candidates: EvaluatedCandidate[];
   recipes: Recipe[];
+  // "Cook with what you have" — recipes buildable from the current
+  // pantry that also target an open absolute gap. [] when there's no
+  // open absolute gap or nothing in the pantry matches it.
+  pantry_recipes: Recipe[];
+  // Broader "easy things to add" list across every flagged gap, favoring
+  // low effort/cost and seasonal availability — see services/easy_swaps.py.
+  easy_swaps: EasySwap[];
+  // Warm, conversational phrasing of the health score/gaps/recommendation
+  // /easy swaps/progress above — an LLM only rephrases these already-
+  // computed facts, never adds new ones (see backend services/nutri_coach.py).
+  coach_message: string;
+  // Shown alongside the purchase recommendation above (Option A), not
+  // instead of it — null when nothing in the pantry matches any open gap.
+  pantry_match: PantryMatch | null;
   progress?: ProgressReport | null;
 }
 
