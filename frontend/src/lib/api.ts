@@ -13,6 +13,8 @@ import type {
   ReceiptItemUpdate,
   ReceiptRow,
   UploadReceiptResponse,
+  ProductSearchResult,
+  ItemMatchPick,
 } from "@/types/api";
 import { supabase } from "@/lib/supabase";
 
@@ -126,6 +128,48 @@ export async function uploadReceiptFiles(
     onProgress?.(i + 1, files.length);
   }
   return results;
+}
+
+// E5-S2: manual product search across OFF and BLS (nutrition-bearing
+// results only, enforced server-side). Both failing degrades to an empty
+// list rather than an error, so the review UI stays usable.
+export async function searchProducts(query: string): Promise<ProductSearchResult[]> {
+  const q = encodeURIComponent(query);
+  const [off, bls] = await Promise.all([
+    fetch(`${API_BASE}/off/search?q=${q}`, { headers: await authHeader() })
+      .then((r) => (r.ok ? r.json() : { results: [] }))
+      .catch(() => ({ results: [] })),
+    fetch(`${API_BASE}/bls/search?q=${q}`, { headers: await authHeader() })
+      .then((r) => (r.ok ? r.json() : { results: [] }))
+      .catch(() => ({ results: [] })),
+  ]);
+  return [...(off.results ?? []), ...(bls.results ?? [])] as ProductSearchResult[];
+}
+
+// E5-S3: pin an item to a user-chosen product (writes a verified-match vote).
+export async function pickItemMatch(
+  receiptId: string,
+  itemId: string,
+  pick: ItemMatchPick,
+): Promise<{ matched_name: string; voted: boolean }> {
+  const res = await fetch(`${API_BASE}/receipts/${receiptId}/items/${itemId}/match`, {
+    method: "POST",
+    headers: await jsonHeaders(),
+    body: JSON.stringify(pick),
+  });
+  return handle(res);
+}
+
+// E5-S5: log an item the user couldn't find a product for.
+export async function flagNoMatch(
+  receiptId: string,
+  itemId: string,
+): Promise<{ logged: boolean; count: number }> {
+  const res = await fetch(`${API_BASE}/receipts/${receiptId}/items/${itemId}/no-match`, {
+    method: "POST",
+    headers: await authHeader(),
+  });
+  return handle(res);
 }
 
 export async function listReceipts(): Promise<{ user_id: string; receipts: ReceiptRow[] }> {

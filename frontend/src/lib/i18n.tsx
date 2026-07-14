@@ -269,6 +269,17 @@ const STRINGS: Record<string, { en: string; de: string }> = {
   "review.confidence.low": { en: "low confidence", de: "geringe Sicherheit" },
   "review.rawPrefix": { en: "raw:", de: "roh:" },
   "review.uncategorized": { en: "uncategorized", de: "unkategorisiert" },
+  // E5 — manual search, pick, no-match
+  "review.fixMatch": { en: "Wrong product? Search", de: "Falsches Produkt? Suchen" },
+  "review.searchPlaceholder": { en: "Search OpenFoodFacts + BLS…", de: "OpenFoodFacts + BLS durchsuchen…" },
+  "review.searchButton": { en: "Search", de: "Suchen" },
+  "review.searching": { en: "Searching…", de: "Wird gesucht…" },
+  "review.noResults": { en: "No nutrition-bearing products found. Try a shorter term.", de: "Keine Produkte mit Nährwerten gefunden. Versuche einen kürzeren Begriff." },
+  "review.useThis": { en: "Use this", de: "Übernehmen" },
+  "review.noMatch": { en: "No match found", de: "Kein Treffer" },
+  "review.noMatchLogged": { en: "Logged — thanks.", de: "Notiert — danke." },
+  "review.picked": { en: "Saved & learned for next time.", de: "Gespeichert & für nächstes Mal gelernt." },
+  "review.close": { en: "Close", de: "Schließen" },
 
   // Results step — now also the merged "Overview"/home page (formerly
   // DashboardStep.tsx's mockup): greeting, inactivity reminder, and the

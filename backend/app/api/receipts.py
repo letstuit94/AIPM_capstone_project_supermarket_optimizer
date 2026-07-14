@@ -27,7 +27,8 @@ from backend.app.db.supabase import (
 )
 from backend.app.db.receipt_items_repo import insert_receipt_items
 from backend.app.services.pantry import add_items_to_pantry
-from backend.app.models.receipt import ParsedReceipt, ReceiptItemUpdate
+from backend.app.models.receipt import ParsedReceipt, ReceiptItemUpdate, ReceiptItemMatch
+from backend.app.services import verified_matches
 from backend.app.services.nutrition_mapping import map_items
 from backend.app.services.nutrition_snapshot import invalidate_snapshot_cache
 from backend.app.services.confidence import confidence_for_product
@@ -223,6 +224,96 @@ def correct_receipt_item(
 
     update_receipt_item(item_id, fields)
     return {"receipt_id": receipt_id, "item_id": item_id, "updated": fields}
+
+
+def _receipt_store(receipt: dict) -> str | None:
+    """The store for a receipt — from the promoted column (E3) or, failing
+    that, the parsed JSON in raw_text."""
+
+    if receipt.get("store"):
+        return receipt["store"]
+    raw = receipt.get("raw_text")
+    if isinstance(raw, dict):
+        return raw.get("store")
+    return None
+
+
+def _find_item(receipt_id: str, item_id: str) -> dict:
+    for item in get_receipt_items(receipt_id):
+        if item.get("id") == item_id:
+            return item
+    raise HTTPException(status_code=404, detail="Item not found for this receipt.")
+
+
+@router.post("/receipts/{receipt_id}/items/{item_id}/match")
+def pick_item_match(
+    receipt_id: str,
+    item_id: str,
+    pick: ReceiptItemMatch,
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Repoint a receipt item to a user-chosen product and write a verified
+    match (E5-S3 / R-WRITE). An explicit manual pick is the vote trigger;
+    passive acceptance of an auto/Tier-0 match never votes.
+
+    The vote is keyed by the item's normalized raw text + the receipt's
+    store (BR-MT0a/MT6), so next time the same line resolves via Tier-0.
+    """
+
+    receipt = get_receipt(receipt_id)
+    if receipt is None:
+        raise HTTPException(status_code=404, detail="Receipt not found.")
+    _assert_owner(receipt, user_id)
+    item = _find_item(receipt_id, item_id)
+
+    # repoint the stored item to the chosen product
+    update_receipt_item(item_id, {
+        "normalized_name": pick.matched_name,
+        "matched_product_id": pick.off_id or pick.bls_code,
+    })
+
+    store = _receipt_store(receipt)
+    verified_matches.record_vote(
+        raw_text=item.get("raw_name") or item.get("normalized_name") or pick.matched_name,
+        store=store,
+        source=pick.source,
+        user_id=user_id,
+        off_id=pick.off_id,
+        bls_code=pick.bls_code,
+        matched_name=pick.matched_name,
+        nova=pick.nova,
+        nutrition=pick.nutrition,
+    )
+    invalidate_snapshot_cache(user_id)
+    log_event("match_corrected", {"item_id": item_id, "source": pick.source}, user_id)
+    return {"receipt_id": receipt_id, "item_id": item_id, "matched_name": pick.matched_name, "voted": True}
+
+
+@router.post("/receipts/{receipt_id}/items/{item_id}/no-match")
+def flag_no_match(
+    receipt_id: str,
+    item_id: str,
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Log an item the user couldn't find a product for (E5-S5): its raw text
+    and store go to the no-match queue with a frequency counter, so
+    recurring OFF/BLS coverage gaps become visible. Does not cast a vote.
+    """
+
+    receipt = get_receipt(receipt_id)
+    if receipt is None:
+        raise HTTPException(status_code=404, detail="Receipt not found.")
+    _assert_owner(receipt, user_id)
+    item = _find_item(receipt_id, item_id)
+
+    entry = verified_matches.log_no_match(
+        raw_text=item.get("raw_name") or item.get("normalized_name") or "",
+        store=_receipt_store(receipt),
+    )
+    log_event("no_match_logged", {"item_id": item_id}, user_id)
+    return {"receipt_id": receipt_id, "item_id": item_id, "logged": True, "count": entry.get("count")}
 
 
 @router.delete("/receipts/{receipt_id}")
