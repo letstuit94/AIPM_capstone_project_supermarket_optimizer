@@ -56,6 +56,7 @@ export function AppShell({
   onDeleteData,
   canDeleteData,
   hasUnreadNotifications,
+  restrictNav,
   children,
 }: {
   step: StepId;
@@ -63,17 +64,23 @@ export function AppShell({
   onDeleteData?: () => void;
   canDeleteData?: boolean;
   hasUnreadNotifications?: boolean;
+  // True whenever the caller (App.tsx) has decided navigation must be
+  // locked down — the onboarding chat/upload steps always set this, and
+  // so does the "review" step while the baseline-upload gate (E1) is
+  // still active (reviewing a receipt mid-gate must not be a back door
+  // into Insights/Pantry/Diary before the 50-item target is reached).
+  // App.tsx is the single source of truth for this — AppShell never
+  // guesses it from `step` alone.
+  restrictNav: boolean;
   children: ReactNode;
 }) {
   const { t, language, setLanguage } = useLanguage();
-  // During onboarding — including its baseline-receipt continuation,
-  // OnboardingUploadStep.tsx — the tab nav is hidden on purpose (the
-  // user shouldn't be able to jump to Results/Pantry mid-flow, before a
-  // profile or first receipt even exists) — a language toggle takes its
-  // place instead, same pill pattern as LandingStep's header, since the
-  // chat no longer asks a language question itself (removed: language
-  // is chosen once, on the landing page, and stays changeable from here).
-  const isOnboarding = step === "onboarding" || step === "onboardingUpload";
+  // While restricted, both the tab nav AND the brand/logo link (which
+  // would otherwise jump straight to "results") are hidden/inert — a
+  // language toggle takes its place instead, same pill pattern as
+  // LandingStep's header, since the chat no longer asks a language
+  // question itself (removed: language is chosen once, on the landing
+  // page, and stays changeable from here).
   const langToggle = (
     <div className="flex shrink-0 gap-1 rounded-full bg-surface p-1 text-xs ring-1 ring-black/5">
       {(["en", "de"] as const).map((lng) => (
@@ -94,16 +101,29 @@ export function AppShell({
   return (
     <div className="min-h-screen bg-canvas font-sans text-ink antialiased selection:bg-ink/10">
       <nav className="mx-auto flex max-w-3xl items-center gap-3 px-6 py-6">
-        <button
-          type="button"
-          onClick={() => onNavigate("results")}
-          className="flex shrink-0 items-center gap-3"
-        >
-          <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent">
-            <Logo className="size-3.5" />
+        {/* Bug fix: this used to always be a button to "results", even
+            during onboarding/the upload gate — a back door into Insights
+            before a profile or the 50-item baseline even existed. Now
+            it's inert (no onClick, not a <button>) while restricted. */}
+        {restrictNav ? (
+          <span className="flex shrink-0 items-center gap-3">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent">
+              <Logo className="size-3.5" />
+            </span>
+            <span className="text-sm font-medium tracking-tight">NutriWise</span>
           </span>
-          <span className="text-sm font-medium tracking-tight">NutriWise</span>
-        </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onNavigate("results")}
+            className="flex shrink-0 items-center gap-3"
+          >
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent">
+              <Logo className="size-3.5" />
+            </span>
+            <span className="text-sm font-medium tracking-tight">NutriWise</span>
+          </button>
+        )}
         {/* Bug fix: the tab list used to be `hidden sm:flex` — on any
             viewport narrower than the `sm` breakpoint there was no nav
             at all, only the logo. Now it always renders and scrolls
@@ -112,7 +132,7 @@ export function AppShell({
             (previously only shown during onboarding — outside it there
             was no way to change language at all once past the chat). */}
         <div className="flex flex-1 items-center justify-end gap-2 overflow-x-auto">
-          {!isOnboarding ? (
+          {!restrictNav ? (
             <>
               <div className="flex shrink-0 gap-1 rounded-full bg-surface p-1 ring-1 ring-black/5">
                 {NAV.map((item) => (

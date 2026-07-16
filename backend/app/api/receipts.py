@@ -4,7 +4,7 @@ from uuid import uuid4
 from pydantic import ValidationError
 from postgrest.exceptions import APIError
 
-from backend.app.services.storage import upload_receipt_bytes, delete_receipt_bytes
+from backend.app.services.storage import upload_receipt_bytes, delete_receipt_bytes, get_receipt_image_url
 from backend.app.services.receipt_parser import (
     scan_receipt_bytes,
     scan_receipt_text,
@@ -153,18 +153,11 @@ async def upload_receipt(
     update_receipt_with_parse(receipt_id, parsed)
     insert_receipt_items(receipt_id, parsed)
 
-    # E12-S5 / BR-P4 retention: the raw receipt image isn't needed once it's
-    # parsed — extraction already ran (locally), and nothing in the app ever
-    # displays it back. So delete it from storage immediately after
-    # successful processing and null the column. Best-effort: a storage
-    # hiccup must not fail an otherwise-successful upload.
-    if storage_path:
-        try:
-            delete_receipt_bytes(storage_path)
-            clear_receipt_storage_path(receipt_id)
-            storage_path = None
-        except Exception as exc:
-            log_event("image_retention_delete_failed", {"error": str(exc)}, user_id)
+    # E12-S5 / BR-P4 retention: the raw receipt image is kept until the user
+    # finishes reviewing this receipt — Review shows it back at the top of
+    # the page (see GET .../image) — then deleted via DELETE .../image,
+    # called once the user moves past this receipt. Never kept longer than
+    # that in-between window.
 
     # Pantry sync is a side-effect of the upload — a schema gap in an
     # unmigrated pantry_items table (e.g. missing user_id column) must not
@@ -253,6 +246,53 @@ def read_receipt(receipt_id: str):
 
     items = get_receipt_items(receipt_id)
     return {"receipt": receipt, "items": items}
+
+
+@router.get("/receipts/{receipt_id}/image")
+def get_receipt_image(receipt_id: str, user_id: str = Depends(get_current_user)):
+    """
+    A short-lived signed URL for the receipt's original photo, shown at
+    the top of Review (E12-S5/BR-P4: kept only for that brief window —
+    see DELETE .../image, called once the user is done reviewing it).
+    404 for a text-pasted receipt or one whose image is already gone,
+    not an error — Review treats that as "nothing to show".
+    """
+
+    receipt = get_receipt(receipt_id)
+    if receipt is None:
+        raise HTTPException(status_code=404, detail="Receipt not found.")
+    _assert_owner(receipt, user_id)
+
+    storage_path = receipt.get("storage_path")
+    if not storage_path:
+        raise HTTPException(status_code=404, detail="No image stored for this receipt.")
+
+    return {"receipt_id": receipt_id, "url": get_receipt_image_url(storage_path)}
+
+
+@router.delete("/receipts/{receipt_id}/image")
+def delete_receipt_image(receipt_id: str, user_id: str = Depends(get_current_user)):
+    """
+    Delete just the stored photo once the user has finished reviewing this
+    receipt (E12-S5/BR-P4) — the receipt row and its items are untouched,
+    only the original image goes. Idempotent: calling it again, or when
+    there was never an image (a text-pasted receipt), is a no-op.
+    """
+
+    receipt = get_receipt(receipt_id)
+    if receipt is None:
+        raise HTTPException(status_code=404, detail="Receipt not found.")
+    _assert_owner(receipt, user_id)
+
+    storage_path = receipt.get("storage_path")
+    if storage_path:
+        try:
+            delete_receipt_bytes(storage_path)
+            clear_receipt_storage_path(receipt_id)
+        except Exception as exc:
+            log_event("image_retention_delete_failed", {"error": str(exc)}, user_id)
+
+    return {"receipt_id": receipt_id, "deleted": True}
 
 
 @router.patch("/receipts/{receipt_id}/items/{item_id}")

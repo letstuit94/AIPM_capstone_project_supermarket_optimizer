@@ -56,11 +56,26 @@ export interface ReceiptRow {
   file_type: string | null;
   storage_path: string | null;
   status: string;
+  // Promoted columns (E3-S2) — null until parsing finishes.
+  store?: string | null;
+  purchase_date?: string | null;
+  // The full parsed payload (store/date/items/scan_quality/items_count) —
+  // always present once processed, kept as the one source of truth so
+  // nothing needs re-deriving from the promoted columns above.
+  raw_text?: ParsedReceipt | null;
 }
 
 export interface ReceiptDetailResponse {
   receipt: ReceiptRow;
   items: ReceiptItemRow[];
+}
+
+// A short-lived signed URL for the receipt's original photo (Review's
+// "show what you uploaded" — GET /receipts/{id}/image). Absent/404 for a
+// text-pasted receipt or once DELETE .../image has run.
+export interface ReceiptImageResponse {
+  receipt_id: string;
+  url: string;
 }
 
 export interface ReceiptItemUpdate {

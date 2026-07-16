@@ -10,6 +10,7 @@ import type {
   Profile,
   ProfileCreate,
   ReceiptDetailResponse,
+  ReceiptImageResponse,
   ReceiptItemUpdate,
   ReceiptRow,
   ReceiptUploadProgress,
@@ -242,6 +243,24 @@ export async function getReceiptUploadProgress(): Promise<ReceiptUploadProgress>
 export async function getReceipt(receiptId: string): Promise<ReceiptDetailResponse> {
   const res = await fetch(`${API_BASE}/receipts/${receiptId}`, { headers: await authHeader() });
   return handle<ReceiptDetailResponse>(res);
+}
+
+// Review's "show the photo you uploaded" — a short-lived signed URL, kept
+// only until the user finishes reviewing this receipt. null (not an
+// error) for a text-pasted receipt or one whose image is already gone.
+export async function getReceiptImageUrl(receiptId: string): Promise<ReceiptImageResponse | null> {
+  const res = await fetch(`${API_BASE}/receipts/${receiptId}/image`, { headers: await authHeader() });
+  return res.status === 404 ? null : handle<ReceiptImageResponse>(res);
+}
+
+// Deletes just the stored photo once review is done (E12-S5/BR-P4) — the
+// receipt row and its items are untouched.
+export async function deleteReceiptImage(receiptId: string): Promise<{ receipt_id: string; deleted: boolean }> {
+  const res = await fetch(`${API_BASE}/receipts/${receiptId}/image`, {
+    method: "DELETE",
+    headers: await authHeader(),
+  });
+  return handle<{ receipt_id: string; deleted: boolean }>(res);
 }
 
 export async function updateReceiptItem(

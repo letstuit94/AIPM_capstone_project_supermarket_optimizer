@@ -4,6 +4,8 @@ import { cn } from "@/lib/utils";
 import { useLanguage } from "@/lib/i18n";
 import {
   getReceipt,
+  getReceiptImageUrl,
+  deleteReceiptImage,
   updateReceiptItem,
   searchProducts,
   pickItemMatch,
@@ -11,7 +13,7 @@ import {
   markItemNonFood,
   ApiError,
 } from "@/lib/api";
-import type { ReceiptItemRow, ProductSearchResult } from "@/types/api";
+import type { ReceiptItemRow, ReceiptRow, ProductSearchResult } from "@/types/api";
 
 export const NON_FOOD_CATEGORY = "non_food";
 
@@ -306,25 +308,84 @@ function ItemRow({
   );
 }
 
+// The uploaded receipt, front and center at the top of the page: the
+// photo (kept only for this review window — see App.tsx/handleContinue
+// below, which deletes it once the user moves past this receipt) plus a
+// summary line built from data the parser already extracted. `store`/
+// `purchase_date` are the promoted columns; `raw_text` (the full parsed
+// payload) is the fallback for whichever of those hasn't been promoted on
+// an unmigrated DB, and is the only place scan_quality lives.
+function ReceiptHeader({
+  receipt,
+  imageUrl,
+  itemCount,
+}: {
+  receipt: ReceiptRow;
+  imageUrl: string | null;
+  itemCount: number;
+}) {
+  const { t } = useLanguage();
+  const store = receipt.store ?? receipt.raw_text?.store ?? t("review.unknownStore");
+  const date = receipt.purchase_date ?? receipt.raw_text?.date ?? null;
+  const scanQuality = receipt.raw_text?.scan_quality ?? null;
+
+  return (
+    <Card className="space-y-3">
+      {imageUrl ? (
+        <img
+          src={imageUrl}
+          alt={t("review.receiptImageAlt")}
+          className="mx-auto max-h-80 w-auto rounded-xl object-contain ring-1 ring-black/5"
+        />
+      ) : null}
+      <div>
+        <p className="truncate text-lg font-medium tracking-tight">{store}</p>
+        <p className="text-xs text-ink/50">
+          {date ? `${date} · ` : ""}
+          {scanQuality ? `${scanQuality} · ` : ""}
+          {itemCount} {t("upload.itemsSuffix")}
+        </p>
+      </div>
+    </Card>
+  );
+}
+
 export function ReviewStep({
-  receiptId,
+  receiptIds,
   onContinue,
 }: {
-  receiptId: string;
+  // Every receipt from the upload that led here — reviewed one at a time,
+  // in order; `onContinue` only fires once the last one is done (E5).
+  receiptIds: string[];
   onContinue: () => void;
 }) {
+  const [index, setIndex] = useState(0);
+  const receiptId = receiptIds[Math.min(index, receiptIds.length - 1)];
+  const isLast = index >= receiptIds.length - 1;
+
+  const [receipt, setReceipt] = useState<ReceiptRow | null>(null);
   const [items, setItems] = useState<ReceiptItemRow[] | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { t } = useLanguage();
 
   async function load() {
     setError(null);
+    setItems(null);
+    setImageUrl(null);
     try {
       const res = await getReceipt(receiptId);
+      setReceipt(res.receipt);
       setItems(res.items);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : t("review.loadFailed"));
     }
+    // Independent of the items fetch above — a missing/expired image (a
+    // text-pasted receipt, or one already reviewed) just means no photo
+    // shows, never an error for the page as a whole.
+    getReceiptImageUrl(receiptId)
+      .then((res) => setImageUrl(res?.url ?? null))
+      .catch(() => setImageUrl(null));
   }
 
   useEffect(() => {
@@ -340,6 +401,18 @@ export function ReviewStep({
     await load();
   }
 
+  // E12-S5/BR-P4: the photo is only ever kept between upload and the end
+  // of review — delete it now that the user is done with this receipt,
+  // then either page to the next one or hand off to the caller.
+  async function handleContinueClick() {
+    void deleteReceiptImage(receiptId).catch(() => {});
+    if (isLast) {
+      onContinue();
+    } else {
+      setIndex((i) => i + 1);
+    }
+  }
+
   return (
     <section className="space-y-8 px-6 pb-16">
       <header className="space-y-2">
@@ -348,6 +421,13 @@ export function ReviewStep({
           {t("review.title")}
         </h1>
         <p className="max-w-[56ch] text-pretty text-base text-ink/60">{t("review.body")}</p>
+        {receiptIds.length > 1 ? (
+          <p className="text-xs font-medium uppercase tracking-widest text-ink/40">
+            {t("review.pageOf")
+              .replace("{index}", String(index + 1))
+              .replace("{total}", String(receiptIds.length))}
+          </p>
+        ) : null}
       </header>
 
       {error ? (
@@ -359,6 +439,8 @@ export function ReviewStep({
       {items === null && !error ? (
         <p className="text-sm text-ink/50">{t("review.loading")}</p>
       ) : null}
+
+      {receipt && items ? <ReceiptHeader receipt={receipt} imageUrl={imageUrl} itemCount={items.length} /> : null}
 
       {items && items.length === 0 ? (
         <Card>
@@ -374,8 +456,8 @@ export function ReviewStep({
         </ul>
       ) : null}
 
-      <PrimaryButton onClick={onContinue} disabled={!items}>
-        {t("review.continueButton")}
+      <PrimaryButton onClick={handleContinueClick} disabled={!items}>
+        {isLast ? t("review.continueButton") : t("review.nextReceiptButton")}
       </PrimaryButton>
     </section>
   );

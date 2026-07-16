@@ -338,3 +338,107 @@ Dimensions-Balkenanzeige nur bei Bedarf sehen.
 | Task | Component | Input | Output | Success | Test |
 |---|---|---|---|---|---|
 | 14.3.1 Standardmäßig eingeklappt | `frontend/src/steps/ResultsStep.tsx` | bestehende `DimensionBar`-Sektion | Sektion standardmäßig eingeklappt, mit "Details anzeigen"-Toggle | Sektion ist beim Laden nicht sichtbar, aber ein Klick entfernt | Manuell togglen |
+
+---
+
+## Epic 15 — Tiered Nutrition Feedback (Confidence Ladder)
+
+*Note: this section continues in English — scoped in an English-language planning
+session (with Stuart, not Jennifer). Format matches Epics 11–14 above.*
+
+**Goal:** never show the user a confidently-wrong number. Show *something*
+useful from the very first receipt upload, and progressively unlock deeper
+feedback (basket composition → early signal → weekly gap/score → long-term
+trend) only as real evidence accumulates — and tell the user in plain
+language what unlocks the next level.
+
+**Respects two decisions already made above, does not reopen either:**
+- **Section A (line 130):** stays retrospective/confirmed (`ConsumptionEvent`)
+  only. No story below introduces a competing prospective/inferred
+  consumption model.
+- **Section B (line 137):** does not thread receipt `purchase_date` into
+  `PantryItem.last_replenished_at` or build depletion/purchase-interval
+  modeling (`consumption_timeframe.py`/`status_quo.py`) into any new tier.
+  Tier 1 (15.3) reads `receipt_items` directly for a one-off composition
+  snapshot — it is not a consumption-timing model, so it doesn't compete
+  with the retrospective system.
+
+**15.1 — Tracking-Coverage Primitive.** As a user, I want the app to tell
+the difference between "I didn't log/wasn't home" and "I actually ate too
+little," so a gap in my logging never reads as a real nutritional problem.
+
+| Task | Component | Input | Output | Success | Test |
+|---|---|---|---|---|---|
+| 15.1.1 Away-day flag storage | new table `user_day_flags` (next migration slot, e.g. `v15_user_day_flags.sql`), `backend/app/db/pantry_repo.py` (new `mark_day_away` / `unmark_day_away` / `get_away_days`) | `user_id, date` | row `{user_id, date, flag='away'}`, idempotent toggle | a marked day is retrievable and un-markable | mark day X away → appears in `get_away_days`; unmark → disappears |
+| 15.1.2 Coverage calculator | `backend/app/services/pantry.py` (new `day_coverage(user_id, date_from, date_to) -> {tracked, away, untracked}`) | date range, `ConsumptionEvent` rows, `user_day_flags` | every day in range classified as exactly one of `tracked` (≥1 `ConsumptionEvent`), `away` (explicit flag), `untracked` (neither) | counts always sum to the full range length | 7-day range, 3 logged / 1 away / 3 blank → counts match |
+| 15.1.3 Windowed calculations respect coverage | `backend/app/services/intake_estimator.py` (`_estimate_daily_nutrient`, line 86) | existing `window_days`/`offset_days` params + `day_coverage()` | denominator = tracked-day count, not calendar-day count; `away` days excluded entirely, not zeroed | a week with 2 away days no longer reads as a deficit purely from those days | 5 tracked days at 100% of target + 2 away days → weekly gap shows ~0%, not −29% |
+| 15.1.4 "Mark day away" control | `frontend/src/steps/DiaryStep.tsx` (date-nav header) | currently viewed date | toggle button, calls new away-flag API | tapping marks/unmarks the day, state visible on revisit | manual: navigate to a past date, tap "I was away," reload, state persists |
+| 15.1.5 Coverage badge component | new `frontend/src/components/CoverageBadge.tsx` (reuse the `h-2 rounded-full bg-zinc-100` bar idiom already used by `GatedGapsCard`, `ResultsStep.tsx:453-490`) | `{tracked, away, untracked}` + window length | small bar + "X of Y days tracked" label; reused by 15.4/15.5/15.6 | visually consistent with existing progress bars | render with 3/7 and 30/90 sample data |
+| 15.1.6 Explainer copy | `frontend/src/lib/i18n.tsx` (2 new keys) | — | short disclaimer next to the away toggle | user understands the mechanic without asking | visual review, en + de |
+
+**15.2 — Tier 0: Single-Source Targets.** As a user, I want the same
+calorie/macro target shown everywhere in the app, so numbers never silently
+disagree with each other.
+
+| Task | Component | Input | Output | Success | Test |
+|---|---|---|---|---|---|
+| 15.2.1 Audit legacy-engine callers | grep every caller of `nutrition_personalization.personalized_calorie_target_kcal` / `personalized_tdee` / `daily_protein_target_g` | — (read-only) | complete call-site list | no surprises during 15.2.2 | list reviewed, nothing missed |
+| 15.2.2 Retarget calorie gap | `backend/app/services/absolute_gap_detector.py:79` (`detect_calorie_gap`) | `ideal_profile.compute_ideal_profile(profile).calories_kcal` replaces `nutrition_personalization.personalized_calorie_target_kcal(profile)` | same `AbsoluteGap` shape, new target source | `TargetsCard`'s number and the calorie-gap requirement always match | compare `/profile` `ideal_profile.calories_kcal` against the gap detector's requirement — identical |
+| 15.2.3 Decide fate of legacy engine | `backend/app/services/nutrition_personalization.py` | 15.2.1 audit result | either delete the module, or explicitly scope what's left (e.g. a density-model protein ref still in use elsewhere) | no orphaned target logic silently diverging from `ideal_profile.py` | code review — nothing user-facing still compares against the old TDEE |
+
+*No frontend/DB/explainer work in this story — invisible plumbing only.*
+
+**15.3 — Tier 1: Basket Composition.** As a user, I want to see the macro
+makeup of what I've bought before I've logged a single meal, so the app
+isn't empty on day one.
+
+| Task | Component | Input | Output | Success | Test |
+|---|---|---|---|---|---|
+| 15.3.1 Basket composition calculator | new `backend/app/services/basket_composition.py` (`compute_basket_composition(user_id) -> {protein_pct, fat_pct, carb_pct, kcal_total, items_considered}`) | `receipt_items` joined to matched nutrition data (reuse the existing nutrient-resolution used by the snapshot pipeline — don't build a second lookup) | calorie-weighted macro % split across every receipt the user has uploaded | percentages sum to ~100%, computable with zero `ConsumptionEvent`s | upload one receipt, call the function before any pantry confirmation exists |
+| 15.3.2 Expose via API | `backend/app/api/nutrition.py` — new `basket_composition` field on the existing snapshot response, or a new `GET /nutrition/basket-composition` | `user_id` | `{protein_pct, fat_pct, carb_pct}` | reachable before the upload-progress gate clears | call it mid-onboarding, before `ReceiptUploadProgress.complete` |
+| 15.3.3 Basket composition card | new `frontend/src/components/BasketCompositionCard.tsx` (uses the `Card` primitive, `AppShell.tsx:208`) | `basket_composition` | 3-segment bar or percentage rows, labeled "Your basket" | renders in the gated pre-threshold `ResultsStep` view (near `GatedGapsCard`) and optionally `ProfileSummary` | visual check pre- and post-gate |
+| 15.3.4 Honest-framing disclaimer | `frontend/src/lib/i18n.tsx` (new key, same visual treatment as `targets.constrained`) | — | disclaimer: "based on what you've bought, not confirmed eaten yet" | always shown with the card, never presented as a diet claim | visual review |
+
+**15.4 — Tier 2: Early Signal / Calibration Mode.** As a user, I want a
+gentle nudge once I've logged a little, without a hard score built on too
+little data.
+
+| Task | Component | Input | Output | Success | Test |
+|---|---|---|---|---|---|
+| 15.4.1 Tracked-day threshold + blend weight | `backend/app/services/absolute_gap_detector.py` (new `tracking_maturity(user_id, window_days=7) -> {tracked_days, threshold, blend_weight}`) | `day_coverage()` (15.1.2) | `blend_weight = min(1.0, tracked_days / threshold)` — **threshold not yet confirmed, proposal: 3 tracked days** | ratio is 0 with zero logs, 1.0 once threshold met | 0/2/3/7 tracked days → 0 / 0.67 / 1.0 / 1.0 |
+| 15.4.2 Blended composition | `backend/app/services/basket_composition.py` (new `compute_blended_composition`) | 15.3.1 output + confirmed-`ConsumptionEvent` composition + `blend_weight` | weighted average, shifting toward confirmed data as it accumulates | weight=0 → basket-only; weight=1.0 → confirmed-only | unit test both boundaries |
+| 15.4.3 Early-signal UI | `frontend/src/steps/ResultsStep.tsx` (near `BasketCompositionCard`) | blended composition + `blend_weight` + `CoverageBadge` | qualitative copy only ("early signs your protein share is lower than target") — **no numeric score below threshold** | no hard percentage-vs-target shown pre-threshold | visual check at 0/2/3 tracked days |
+| 15.4.4 "Unlock the next tier" explainer | `frontend/src/lib/i18n.tsx` (new key) | `threshold − tracked_days` | dynamic copy: "log 2 more days to unlock your weekly score" | updates live with remaining count | visual check at varying tracked-day counts |
+
+**15.5 — Tier 3: Weekly Gap + Health Score.** As a user, I want an honest
+weekly report card that doesn't punish me for eating outside or traveling.
+
+| Task | Component | Input | Output | Success | Test |
+|---|---|---|---|---|---|
+| 15.5.1 Extend absolute gaps to fat/carbs | `backend/app/services/absolute_gap_detector.py:72` (`_NUTRIENTS`), `backend/app/services/intake_estimator.py` (new `estimate_daily_fat_g`/`estimate_daily_carbs_g` alongside lines 166-195) | `ConsumptionEvent`s, `ideal_profile.compute_ideal_profile()` (post-15.2) | `AbsoluteGap` entries for fat_g/carbs_g, same shape as existing iron/protein/calcium | `detect_absolute_gaps` returns 6 dimensions instead of 3(+calorie) | log a day, verify fat/carb gaps appear alongside existing ones |
+| 15.5.2 Meals-outside daily log | **Option A (recommended):** `backend/app/services/pantry.py` — `log_manual_consumption` with a reserved sentinel name (`normalized_name="__ate_out__"`), reusing existing event machinery, no new table (matches ToDo1's "no new mechanism needed" precedent). **Option B:** new minimal table `meals_outside_log(user_id, date, count)` | user taps "ate out" N times | per-day outside-meal count, queryable by date | **needs team confirmation on A vs. B** | log 2 outside-meals on a day, verify count retrievable |
+| 15.5.3 Effective-target proration | `backend/app/services/absolute_gap_detector.py` (new `effective_target(profile, date, meals_outside_today)`) | `profile.meals_per_day` (**already exists, no new field**), daily target, 15.5.2's count; falls back to the existing static `MealsOutside` enum share (`status_quo.py:31`, `_MEALS_OUTSIDE` dict) on days with no explicit tap | `target × (1 − meals_outside/meals_per_day)` | a day fully eaten outside shows target≈0, not a deficit | 3 meals/day profile, 3 outside-taps → effective target 0 for every macro that day |
+| 15.5.4 Wire into the weekly window | `backend/app/services/intake_estimator.py` (`DEFAULT_WINDOW_DAYS=7`, line 23) | 15.1's away-day exclusion + 15.5.3's effective target | weekly gap compares confirmed intake only against the shrunk target, over tracked days only | a week with 1 away day + 2 partial-outside days shows a fair gap | construct the scenario, compare against a naive flat-target calc |
+| 15.5.5 Fat/carb + coverage badge in Results | `frontend/src/steps/ResultsStep.tsx` (`NutrientStatusList`, lines 83-120) | extended `absolute_gaps` (15.5.1) + `CoverageBadge` | weekly gap cards for all 6 dimensions, coverage badge next to the health score | visually consistent with existing gap cards | visual check with a full week of varied data |
+| 15.5.6 "Why is my target smaller today" explainer | `frontend/src/lib/i18n.tsx` (new key), inline wherever `effective_target < target` | that day's outside-meal count | "2 of 3 meals today were marked eaten out, so today's target is scaled down" | shown only on days it applies | visual check, outside-meal day vs. normal day |
+
+**15.6 — Tier 4: 30/90-Day Trend.** As a user, I want a long-term picture
+that a bad week (lost receipt, vacation) doesn't distort.
+
+| Task | Component | Input | Output | Success | Test |
+|---|---|---|---|---|---|
+| 15.6.1 Rolling weekly-average aggregator | `backend/app/services/intake_estimator.py` (new `estimate_trend(user_id, dimension, total_days=30, bucket_days=7)`, reusing the existing `window_days`/`offset_days` params of `_estimate_daily_nutrient` per bucket — no new estimation logic needed) | dimension, date range | array of `{bucket_start, avg_daily_value, coverage_pct}` | 30 days → ~4 points, 90 days → ~13 points | synthetic data with gaps, verify bucket count/values |
+| 15.6.2 Coverage floor per window | `backend/app/services/absolute_gap_detector.py` (windowed variant of the `has_sufficient_data` pattern, e.g. `has_sufficient_trend_data(user_id, total_days) -> bool`) | `day_coverage()` over the full window — **threshold not yet confirmed, proposal: ≥60% tracked days** | boolean gate; below it, return `insufficient_data` instead of a distorted trend | low-coverage month shows "not enough data," not a number | simulate low-coverage vs. normal month |
+| 15.6.3 Trend chart component | new `frontend/src/components/TrendChart.tsx` (genuinely new — no existing chart component to reuse) | weekly-average points (15.6.1) + `coverage_pct` per bucket | line/area chart; low-coverage buckets visually de-emphasized (dashed/lighter), not hidden | trend stays honest about data gaps | visual check with a synthetic gap month |
+| 15.6.4 30/30/90-day toggle in Results | `frontend/src/steps/ResultsStep.tsx` | window selector (7/30/90 — Tier 3 is the 7-day case) | switching ranges updates the same chart/card area | no jarring reload feel when switching | manual click-through |
+| 15.6.5 Scope guard: no legacy depletion model | documentation/code-review only | — | confirms Tier 4 is built purely on `ConsumptionEvent` + 15.1–15.5, never on `status_quo.py`/`consumption_timeframe.py`'s purchase-interval model | avoids resurrecting the retrospective-vs-prospective debate (Section A) | code review — no new caller of `consumption_timeframe.window_for` introduced |
+| 15.6.6 Trend explainer | `frontend/src/lib/i18n.tsx` (new key) | — | "We only use days with real data for this trend — gaps from travel or a missed upload are skipped, not counted against you" | shown once per chart | visual review |
+
+**Needs confirmation before building** (Claude recommendations, not yet
+checked against the team — same convention as the two flagged items above
+for Epics 11–14):
+- Tracked-day threshold to unlock Tier 3 (15.4.1) — proposed 3 days.
+- Coverage floor for the Tier 4 trend (15.6.2) — proposed ≥60%.
+- Sentinel-event vs. new-table choice for meals-outside logging (15.5.2).
+- Whether to delete `nutrition_personalization.py` outright or keep a scoped
+  remnant (15.2.3).
