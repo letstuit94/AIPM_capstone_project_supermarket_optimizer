@@ -1,7 +1,7 @@
 # Fixtures
 
 Test data for the receipt pipeline (Task 1.5) and the Day-1 contracts in
-`sprint_plan_3weeks.md`.
+`deprecated/sprint_plan_3weeks.md`.
 
 - `receipts/clean_receipt.txt` — a well-formatted German receipt, for the
   text-fallback path (`POST /receipts` with `text=`).

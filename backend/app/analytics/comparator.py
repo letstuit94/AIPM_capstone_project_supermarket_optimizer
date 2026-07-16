@@ -4,7 +4,7 @@ Receipt Comparison Engine (Task 8.6, v2).
 Compares two receipts' item lists to find overlapping products. This is
 groundwork for adoption scoring (Task 8.8): "did the item recommended
 after receipt N actually turn up in receipt N+1?" — both files agree
-this is v2 scope (roadmap_consolidated.md), so it's built as a data-model
+this is v2 scope (deprecated/roadmap_consolidated.md), so it's built as a data-model
 building block rather than a user-facing feature.
 
 Uses the same token-aware fuzzy matcher as Task 2.2's product matching
