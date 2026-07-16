@@ -43,20 +43,16 @@ _EAT_KCAL = {
     ExerciseFrequency.DAILY_ATHLETE: 600,
 }
 # ── BR-E6 goal → calorie adjustment ──────────────────────────────────────
-# BR-E6 defines four goals (lose −15%, maintain 0, build +10%, aggressive
-# gain +15%). The app's Goal enum (models/profile.py) is a different, 6-value
-# set from the chat onboarding, so we map it onto BR-E6's energy directions:
+# BR-E6 defines four tiers (lose −15%, maintain 0, build +10%, aggressive
+# +15%); the onboarding chat offers only 3 of them (Goal, models/profile.py):
 #   LOSE_WEIGHT_GRADUALLY → −15%  (BR-E6 "lose fat")
 #   BUILD_MUSCLE          → +10%  (BR-E6 "build muscle")
-#   MORE_ENERGY / EAT_BALANCED / BETTER_FOCUS / BETTER_SLEEP → 0% (maintain)
-# BR-E6's "aggressive gain" (+15%) has no counterpart in the app's goal set —
-# the onboarding never offers it, so it is intentionally unreachable here
-# rather than mapped to an arbitrary existing goal. Revisit if onboarding
-# adds an aggressive-gain option.
+#   MAINTAIN              → 0%    (BR-E6 "maintain"), also the .get default
+# BR-E6's "aggressive" (+15%) tier is deliberately not offered.
 _GOAL_ADJ = {
     Goal.LOSE_WEIGHT_GRADUALLY: -0.15,
     Goal.BUILD_MUSCLE: 0.10,
-    # everything else → 0.0 (maintenance) via .get default
+    # MAINTAIN → 0.0 (maintenance) via .get default
 }
 # ── BR-M1 protein g/kg ───────────────────────────────────────────────────
 _PROTEIN_BY_EXERCISE = {

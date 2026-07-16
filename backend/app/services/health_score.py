@@ -14,6 +14,7 @@ from typing import List, Tuple
 from backend.app.models.absolute_gap import AbsoluteGap
 from backend.app.models.health_score import HealthScore, HealthScoreLabel
 from backend.app.models.snapshot import DimensionSnapshot
+from backend.app.services import i18n
 
 # Points deducted per flagged dimension at maximum severity (100%
 # deviation from its reference); scaled down for smaller deviations.
@@ -44,30 +45,23 @@ def _label_for(value: int) -> HealthScoreLabel:
     return HealthScoreLabel.POOR
 
 
-def _join(names: List[str]) -> str:
-    if len(names) == 1:
-        return names[0]
-    return ", ".join(names[:-1]) + " and " + names[-1]
-
-
-def _build_summary(flagged: List[Tuple[str, str]]) -> str:
+def _build_summary(flagged: List[Tuple[str, str]], lang: str = "en") -> str:
     if not flagged:
-        return "Your basket looks balanced across every tracked dimension."
+        return i18n.t(lang, "hs.balanced")
 
     low = [name for name, status in flagged if status == "low"]
     high = [name for name, status in flagged if status == "high"]
 
-    parts = []
+    if low and high:
+        return i18n.t(lang, "hs.low_and_high",
+                      low=i18n.join_nutrients(lang, low), high=i18n.join_nutrients(lang, high))
     if low:
-        parts.append(f"low in {_join(low)}")
-    if high:
-        parts.append(f"high in {_join(high)}")
-
-    return "Your basket is " + " and ".join(parts) + "."
+        return i18n.t(lang, "hs.low_only", low=i18n.join_nutrients(lang, low))
+    return i18n.t(lang, "hs.high_only", high=i18n.join_nutrients(lang, high))
 
 
 def compute_health_score(
-    dimensions: List[DimensionSnapshot], absolute_gaps: List[AbsoluteGap]
+    dimensions: List[DimensionSnapshot], absolute_gaps: List[AbsoluteGap], lang: str = "en"
 ) -> HealthScore:
     """
     `dimensions` should be the full Epic 4 dimension list (fiber, protein,
@@ -101,5 +95,5 @@ def compute_health_score(
     return HealthScore(
         value=value,
         label=_label_for(value),
-        summary=_build_summary(flagged),
+        summary=_build_summary(flagged, lang),
     )

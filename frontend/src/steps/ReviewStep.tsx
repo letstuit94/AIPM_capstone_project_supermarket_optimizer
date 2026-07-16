@@ -8,9 +8,12 @@ import {
   searchProducts,
   pickItemMatch,
   flagNoMatch,
+  markItemNonFood,
   ApiError,
 } from "@/lib/api";
 import type { ReceiptItemRow, ProductSearchResult } from "@/types/api";
+
+export const NON_FOOD_CATEGORY = "non_food";
 
 // E5-S2/S3/S5: per-item manual search across OFF+BLS, pick (writes a
 // verified-match vote), or flag as no-match. Collapsed by default.
@@ -27,22 +30,29 @@ function MatchFixer({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState(item.normalized_name ?? item.raw_name ?? "");
   const [results, setResults] = useState<ProductSearchResult[] | null>(null);
-  const [busy, setBusy] = useState(false);
+  // Bug fix: `pick`/`noMatch` used to share one `busy` flag with the
+  // Search button, so clicking "Use this" made the unrelated Search
+  // button flash "Searching…" — the exact "nothing seems to happen"
+  // report. Search now has its own flag; picking/flagging share theirs
+  // (they're mutually-exclusive actions on the same result, never
+  // triggered alongside a search).
+  const [searching, setSearching] = useState(false);
+  const [working, setWorking] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
   async function runSearch() {
     if (query.trim().length < 2) return;
-    setBusy(true);
+    setSearching(true);
     setNote(null);
     try {
       setResults(await searchProducts(query.trim()));
     } finally {
-      setBusy(false);
+      setSearching(false);
     }
   }
 
   async function pick(r: ProductSearchResult) {
-    setBusy(true);
+    setWorking(true);
     try {
       await pickItemMatch(receiptId, item.id, {
         source: r.source,
@@ -52,19 +62,26 @@ function MatchFixer({
         nutrition: r.nutrition,
       });
       setNote(t("review.picked"));
-      onDone();
+      onDone(); // parent reload — the row's name + confidence badge above update immediately
+      // Brief confirmation, then collapse back to the compact toggle — the
+      // updated name/confidence badge on the row is the lasting signal.
+      setTimeout(() => setOpen(false), 900);
+    } catch (e) {
+      setNote(e instanceof ApiError ? e.message : t("review.pickFailed"));
     } finally {
-      setBusy(false);
+      setWorking(false);
     }
   }
 
   async function noMatch() {
-    setBusy(true);
+    setWorking(true);
     try {
       await flagNoMatch(receiptId, item.id);
       setNote(t("review.noMatchLogged"));
+    } catch (e) {
+      setNote(e instanceof ApiError ? e.message : t("review.noMatchFailed"));
     } finally {
-      setBusy(false);
+      setWorking(false);
     }
   }
 
@@ -93,14 +110,14 @@ function MatchFixer({
         <button
           type="button"
           onClick={runSearch}
-          disabled={busy}
+          disabled={searching}
           className="shrink-0 rounded-full bg-ink px-3 py-1.5 text-xs font-medium text-canvas disabled:opacity-40"
         >
-          {busy ? t("review.searching") : t("review.searchButton")}
+          {searching ? t("review.searching") : t("review.searchButton")}
         </button>
       </div>
 
-      {note ? <p className="text-xs text-emerald-600">{note}</p> : null}
+      {note ? <p className="text-xs font-medium text-emerald-600">{note}</p> : null}
 
       {results && results.length === 0 ? (
         <p className="text-xs text-ink/50">{t("review.noResults")}</p>
@@ -120,7 +137,7 @@ function MatchFixer({
               <button
                 type="button"
                 onClick={() => pick(r)}
-                disabled={busy}
+                disabled={working}
                 className="shrink-0 rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-medium text-white disabled:opacity-40"
               >
                 {t("review.useThis")}
@@ -131,7 +148,7 @@ function MatchFixer({
       ) : null}
 
       <div className="flex gap-2 pt-1">
-        <button type="button" onClick={noMatch} disabled={busy} className="text-[11px] text-red-600 hover:underline">
+        <button type="button" onClick={noMatch} disabled={working} className="text-[11px] text-red-600 hover:underline">
           {t("review.noMatch")}
         </button>
         <button type="button" onClick={() => setOpen(false)} className="text-[11px] text-ink/40 hover:underline">
@@ -169,8 +186,11 @@ function ItemRow({
   const [unit, setUnit] = useState(item.unit ?? "");
   const [category, setCategory] = useState(item.category ?? "");
   const [saving, setSaving] = useState(false);
+  const [markingNonFood, setMarkingNonFood] = useState(false);
+  const [nonFoodError, setNonFoodError] = useState<string | null>(null);
   const { t } = useLanguage();
   const confidence = confidenceLabel(item.confidence, t);
+  const isNonFood = item.category === NON_FOOD_CATEGORY;
 
   async function save() {
     setSaving(true);
@@ -187,23 +207,48 @@ function ItemRow({
     }
   }
 
+  async function markNonFood() {
+    setMarkingNonFood(true);
+    setNonFoodError(null);
+    try {
+      await markItemNonFood(receiptId, item.id);
+      await onReload();
+    } catch (e) {
+      setNonFoodError(e instanceof ApiError ? e.message : t("review.markNonFoodFailed"));
+    } finally {
+      setMarkingNonFood(false);
+    }
+  }
+
   if (!editing) {
     return (
       <li className="px-5 py-4">
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium tracking-tight">
+            <p
+              className={cn(
+                "truncate text-sm font-medium tracking-tight",
+                isNonFood && "text-ink/40 line-through",
+              )}
+            >
               {item.normalized_name || item.raw_name}
             </p>
             <p className="truncate text-xs text-ink/50">
-              {item.quantity ?? "?"} {item.unit ?? ""} · {item.category ?? t("review.uncategorized")} ·{" "}
+              {item.quantity ?? "?"} {item.unit ?? ""} ·{" "}
+              {isNonFood ? t("review.notFoodLabel") : item.category ?? t("review.uncategorized")} ·{" "}
               {t("review.rawPrefix")} "{item.raw_name}"
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-3">
-            <span className={`text-[11px] uppercase tracking-widest ${confidence.tone}`}>
-              {confidence.text}
-            </span>
+            {isNonFood ? (
+              <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-widest text-ink/50">
+                {t("review.notFoodBadge")}
+              </span>
+            ) : (
+              <span className={`text-[11px] uppercase tracking-widest ${confidence.tone}`}>
+                {confidence.text}
+              </span>
+            )}
             <button
               type="button"
               onClick={() => setEditing(true)}
@@ -213,7 +258,21 @@ function ItemRow({
             </button>
           </div>
         </div>
-        <MatchFixer receiptId={receiptId} item={item} onDone={onReload} />
+
+        {!isNonFood ? (
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <MatchFixer receiptId={receiptId} item={item} onDone={onReload} />
+            <button
+              type="button"
+              onClick={markNonFood}
+              disabled={markingNonFood}
+              className="text-[11px] font-medium tracking-tight text-ink/40 hover:text-red-600 disabled:opacity-40"
+            >
+              {markingNonFood ? t("review.markingNonFood") : t("review.markNonFood")}
+            </button>
+          </div>
+        ) : null}
+        {nonFoodError ? <p className="mt-1 text-[11px] text-red-600">{nonFoodError}</p> : null}
       </li>
     );
   }

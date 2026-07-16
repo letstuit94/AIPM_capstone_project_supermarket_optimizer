@@ -10,6 +10,7 @@ from backend.app.api.feedback import router as feedback_router
 from backend.app.api.analytics import router as analytics_router
 from backend.app.api.pantry import router as pantry_router
 from backend.app.api.products import router as products_router
+from backend.app.api.consumption import router as consumption_router
 
 app = FastAPI(title="NutriWise API")
 
@@ -46,6 +47,7 @@ app.include_router(feedback_router)
 app.include_router(analytics_router)
 app.include_router(pantry_router)
 app.include_router(products_router)
+app.include_router(consumption_router)
 @app.get("/")
 def root():
     return {"message": "NutriWise API is running"}

@@ -47,7 +47,7 @@ def _profile(**overrides) -> ProfileCreate:
     age is exactly 32 relative to the pinned reference date used below."""
 
     base = dict(
-        goal=Goal.EAT_BALANCED,
+        goal=Goal.MAINTAIN,
         activity_level="moderately_active",
         dietary_pattern="omnivore",
         sex=Sex.MALE,
@@ -119,8 +119,7 @@ def test_goal_adjustment():
     # maintenance goals leave TDEE unchanged; only lose/build shift it.
     for goal, adj in {
         Goal.LOSE_WEIGHT_GRADUALLY: -0.15,
-        Goal.EAT_BALANCED: 0.0,
-        Goal.MORE_ENERGY: 0.0,
+        Goal.MAINTAIN: 0.0,
         Goal.BUILD_MUSCLE: 0.10,
     }.items():
         age32_dob = f"{date.today().year - 32}-01-01"
@@ -138,7 +137,7 @@ def test_protein():
     check("protein g/kg (2.0 * 80)", ip.protein_g, 160)
     # sedentary maintenance: activity 1.0 vs goal 1.2 → 1.2 g/kg
     ip2 = compute_ideal_profile(
-        _profile(goal=Goal.EAT_BALANCED, exercise_frequency=ExerciseFrequency.NONE, weight_kg=80)
+        _profile(goal=Goal.MAINTAIN, exercise_frequency=ExerciseFrequency.NONE, weight_kg=80)
     )
     check("protein g/kg (1.2 * 80)", ip2.protein_g, 96)
 
@@ -146,7 +145,7 @@ def test_protein():
 # ── Fat hormone floor (BR-M2) ────────────────────────────────────────────
 def test_fat_floor():
     print("Scenario: fat = max(30% kcal, 0.8 g/kg)")
-    ip = compute_ideal_profile(_profile(goal=Goal.EAT_BALANCED))
+    ip = compute_ideal_profile(_profile(goal=Goal.MAINTAIN))
     thirty_pct = 0.30 * ip.calories_kcal / KCAL_PER_G["fat"]
     floor = 0.8 * 80
     check("fat = greater of 30%/floor", ip.fat_g, round(max(thirty_pct, floor)))
@@ -171,7 +170,7 @@ def test_constrained():
     check("constrained flag set", ip.constrained, True)
     check("fat dropped to 0.8 g/kg floor", ip.fat_g, round(0.8 * 120))
     # A normal profile is never flagged constrained and has positive carbs.
-    ok = compute_ideal_profile(_profile(goal=Goal.EAT_BALANCED))
+    ok = compute_ideal_profile(_profile(goal=Goal.MAINTAIN))
     check("normal profile not constrained", ok.constrained, False)
     check("normal profile positive carbs", ok.carbs_g > 0, True)
 
@@ -187,7 +186,7 @@ def test_energy_densities():
 # ── Fibre 14 g / 1000 kcal (BR-M4) ───────────────────────────────────────
 def test_fiber():
     print("Scenario: fibre = 14 g per 1000 kcal")
-    ip = compute_ideal_profile(_profile(goal=Goal.EAT_BALANCED))
+    ip = compute_ideal_profile(_profile(goal=Goal.MAINTAIN))
     check("fiber", ip.fiber_g, round(14.0 * ip.calories_kcal / 1000.0))
 
 
@@ -213,7 +212,7 @@ def test_micros_present():
 # ── Incomplete biometrics → None (engine guard) ──────────────────────────
 def test_incomplete_returns_none():
     print("Scenario: incomplete biometrics yield no ideal profile")
-    incomplete = ProfileCreate(goal=Goal.EAT_BALANCED, activity_level="moderately_active", dietary_pattern="omnivore")
+    incomplete = ProfileCreate(goal=Goal.MAINTAIN, activity_level="moderately_active", dietary_pattern="omnivore")
     check("None when biometrics missing", compute_ideal_profile(incomplete), None)
 
 

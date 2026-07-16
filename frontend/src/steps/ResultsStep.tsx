@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { SectionLabel, Card, inputCls } from "@/components/AppShell";
 import type { StepId } from "@/components/AppShell";
 import { cn } from "@/lib/utils";
-import { useLanguage } from "@/lib/i18n";
+import { useLanguage, nutrientLabel } from "@/lib/i18n";
 import {
   getNutritionSnapshot,
   getNextCart,
@@ -16,6 +16,7 @@ import {
 import { AnalysisCard } from "@/steps/AnalysisCard";
 import { NextCartCard as StructuredNextCartCard } from "@/steps/NextCartCard";
 import { Level2Card } from "@/steps/Level2Card";
+import { EatenFeedbackCard } from "@/steps/EatenFeedbackCard";
 import type {
   AbsoluteGap,
   Conflict,
@@ -82,14 +83,14 @@ function NutrientStatusList({
   gaps: Gap[];
   absoluteGaps: AbsoluteGap[];
 }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   return (
     <div className="grid gap-4 sm:grid-cols-1">
       {gaps.map((gap) => (
         <Card key={`density-${gap.dimension}`} className="space-y-1">
-          <p className="text-sm font-medium capitalize tracking-tight">
-            {gap.dimension} — {gap.status}
+          <p className="text-sm font-medium tracking-tight">
+            {nutrientLabel(gap.dimension, language)} — {t(`status.${gap.status}`)}
           </p>
           <p className="text-sm text-ink/70">{gap.message}</p>
         </Card>
@@ -97,8 +98,8 @@ function NutrientStatusList({
       {absoluteGaps.map((gap) => (
         <Card key={`absolute-${gap.dimension}`} className="space-y-1">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium capitalize tracking-tight">
-              {gap.dimension} — {gap.status}
+            <p className="text-sm font-medium tracking-tight">
+              {nutrientLabel(gap.dimension, language)} — {t(`status.${gap.status}`)}
             </p>
             <span className={`text-[11px] uppercase tracking-widest ${CONFIDENCE_TONE[gap.confidence]}`}>
               {confidenceText(gap.confidence, t)}
@@ -106,7 +107,7 @@ function NutrientStatusList({
           </div>
           <p className="text-sm text-ink/70">{gap.message}</p>
           <p className="text-xs text-ink/40">
-            {gap.daily_estimate} / {gap.daily_requirement} per day ({Math.round(gap.ratio * 100)}%)
+            {gap.daily_estimate} / {gap.daily_requirement} {t("results.perDay")} ({Math.round(gap.ratio * 100)}%)
           </p>
         </Card>
       ))}
@@ -119,12 +120,12 @@ function confidenceText(confidence: string, t: (key: string) => string): string 
 }
 
 function DimensionBar({ dim }: { dim: DimensionSnapshot }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const pct = dim.ratio !== null ? Math.min(dim.ratio, 1.4) / 1.4 * 100 : 0;
   return (
     <div className="space-y-2">
       <div className="flex items-baseline justify-between">
-        <p className="text-sm font-medium capitalize tracking-tight">{dim.dimension}</p>
+        <p className="text-sm font-medium tracking-tight">{nutrientLabel(dim.dimension, language)}</p>
         <p className="text-xs text-ink/50">
           {dim.value !== null ? `${dim.value} ${dim.unit}` : t("results.noData")}
         </p>
@@ -227,7 +228,7 @@ function HealthScoreCard({ score }: { score: HealthScore }) {
 }
 
 function EasySwapsCard({ swaps }: { swaps: NextCartRecommendation["easy_swaps"] }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   return (
     <Card className="space-y-3">
       <SectionLabel>{t("results.easySwaps")}</SectionLabel>
@@ -238,7 +239,7 @@ function EasySwapsCard({ swaps }: { swaps: NextCartRecommendation["easy_swaps"] 
               <p className="text-sm font-medium tracking-tight">{swap.item}</p>
               <p className="text-xs text-ink/60">{swap.rationale}</p>
               <p className="mt-1 text-[11px] uppercase tracking-widest text-ink/40">
-                {t("results.targets")} {swap.targets_gap}
+                {t("results.targets")} {nutrientLabel(swap.targets_gap, language)}
               </p>
             </div>
             <span className={`shrink-0 text-[11px] uppercase tracking-widest ${COST_TONE[swap.cost]}`}>
@@ -394,7 +395,7 @@ const TREND_TONE: Record<ProgressReport["trend"], string> = {
 };
 
 function ProgressCard({ progress }: { progress: ProgressReport }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   return (
     <Card className="space-y-3">
       <div className="flex items-center justify-between">
@@ -409,8 +410,8 @@ function ProgressCard({ progress }: { progress: ProgressReport }) {
       {progress.deltas.length > 0 ? (
         <ul className="space-y-1 text-xs text-ink/60">
           {progress.deltas.map((d) => (
-            <li key={d.dimension} className="capitalize">
-              · {d.dimension}: {d.before ?? "—"} → {d.after ?? "—"} ({d.direction}
+            <li key={d.dimension}>
+              · {nutrientLabel(d.dimension, language)}: {d.before ?? "—"} → {d.after ?? "—"} ({t(`delta.${d.direction}`)}
               {d.is_improvement === true ? `, ${t("results.improved")}` : ""}
               {d.is_improvement === false ? `, ${t("results.worse")}` : ""})
             </li>
@@ -426,8 +427,8 @@ function ProgressCard({ progress }: { progress: ProgressReport }) {
             {progress.absolute_deltas
               .filter((d) => d.direction !== "unknown")
               .map((d) => (
-                <li key={d.dimension} className="capitalize">
-                  · {d.dimension}: {d.before ?? "—"} → {d.after ?? "—"} ({d.direction}
+                <li key={d.dimension}>
+                  · {nutrientLabel(d.dimension, language)}: {d.before ?? "—"} → {d.after ?? "—"} ({t(`delta.${d.direction}`)}
                   {d.is_improvement === true ? `, ${t("results.improved")}` : ""}
                   {d.is_improvement === false ? `, ${t("results.worse")}` : ""})
                 </li>
@@ -554,7 +555,7 @@ export function ResultsStep({
   // Epic 14.3: nested toggle — even once Details is open, the raw
   // dimension bars are the most technical/skippable part of it.
   const [showDimensions, setShowDimensions] = useState(false);
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   async function load() {
     setLoading(true);
@@ -610,8 +611,11 @@ export function ResultsStep({
 
   useEffect(() => {
     load();
+    // Re-fetch when the language changes too (E13): the backend localizes
+    // its generated prose per request, so switching DE/EN refreshes the
+    // analysis text, not just the app's own static strings.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profileId]);
+  }, [profileId, language]);
 
   const greeting = profileName
     ? `Hi ${profileName} 👋`
@@ -640,13 +644,39 @@ export function ResultsStep({
           ) : null}
         </div>
         <p className="max-w-[56ch] text-pretty text-base text-ink/60">{t("results.body")}</p>
-        <button
-          type="button"
-          onClick={load}
-          className="rounded-full bg-zinc-100 px-4 py-2 text-xs font-medium tracking-tight text-ink ring-1 ring-black/5 hover:bg-zinc-200"
-        >
-          {t("results.refresh")}
-        </button>
+
+        {/* FR-11.4: at-a-glance counter of uploaded receipts & items,
+            surfaced on the main view (it also appears, with match detail,
+            inside "Show details" below). Only shown once there's data. */}
+        {snapshot ? (
+          <p className="text-xs font-medium text-ink/45">
+            📄 {snapshot.receipts_analyzed} {t("results.receiptsCounter")} · {snapshot.items_analyzed}{" "}
+            {t("results.itemsCounter")}
+          </p>
+        ) : null}
+
+        <div className="flex flex-wrap gap-2">
+          {/* FR-11.3: upload a new receipt straight from the hub. Routes
+              into the existing Pantry upload flow (the uploader lives
+              there — no duplicate uploader here). Hidden in the empty
+              state, which already has its own prominent upload CTA. */}
+          {onNavigate && !noData ? (
+            <button
+              type="button"
+              onClick={() => onNavigate("pantry")}
+              className="rounded-full bg-ink px-4 py-2 text-xs font-medium tracking-tight text-canvas hover:opacity-90"
+            >
+              {t("results.uploadReceipt")}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={load}
+            className="rounded-full bg-zinc-100 px-4 py-2 text-xs font-medium tracking-tight text-ink ring-1 ring-black/5 hover:bg-zinc-200"
+          >
+            {t("results.refresh")}
+          </button>
+        </div>
       </header>
 
       {/* Promoted from DashboardStep.tsx's mockup: the inactivity nudge
@@ -666,6 +696,11 @@ export function ResultsStep({
           ) : null}
         </div>
       ) : null}
+
+      {/* E10 variant B: daily consumption update on the dashboard
+          (self-gates to variant-B users with a prior receipt). Submitting
+          reloads so the score reflects the new waste immediately. */}
+      <EatenFeedbackCard surface="B" onSubmitted={load} />
 
       {/* E7: ideal-vs-status-quo score, closeness bars, grouping. */}
       {analysis ? <AnalysisCard analysis={analysis} /> : null}

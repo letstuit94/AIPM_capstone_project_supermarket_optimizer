@@ -4,14 +4,20 @@ import { cn } from "@/lib/utils";
 import { useLanguage, type Lang } from "@/lib/i18n";
 import { createProfile, updateProfile, ApiError } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
-import type { Profile, ProfileCreate } from "@/types/api";
+import type { IdealProfile, Profile, ProfileCreate } from "@/types/api";
 
-// Chat-style Level-1 onboarding (E1-S5). Collects the inputs the Ideal
-// Profile Engine (E2) needs — sex at birth, date of birth, height, weight,
-// exercise frequency, daily movement, meals/snacks — alongside goal, diet,
-// allergies and dislikes. Each answer gets a short, reassuring feedback
-// reply (R-FEEDBACK). Progress is persisted incrementally so a half-done
-// walk-through can be resumed on the next login (E1-S6).
+// Chat-style Level-1 onboarding (E1-S5). The chat itself only ever asks
+// ONBOARDING_STEPS below — name, sex, date of birth, height, weight,
+// exercise frequency, daily movement, goal — exactly what the Ideal
+// Profile Engine (E2) needs to compute calories + macros. Every other
+// preference (diet type, allergies, dislikes, symptoms, digestion,
+// veg/fruit frequency, meals/snacks per day, pregnancy, form of address)
+// is collected later, in Profile Settings (ProfileSummary.tsx), which
+// reuses the fuller STEPS list further down so those fields stay
+// editable without ever blocking onboarding. Each answer gets a short,
+// reassuring feedback reply (R-FEEDBACK). Progress is persisted
+// incrementally so a half-done walk-through can be resumed on the next
+// login (E1-S6).
 
 export type Bi = { en: string; de: string };
 export const bi = (en: string, de: string): Bi => ({ en, de });
@@ -47,6 +53,32 @@ const SYMPTOM_DISCLAIMER = bi(
   "Diese Symptome können mit Nährstofflücken in deiner Ernährung zusammenhängen. Das ist keine medizinische Diagnose. Bitte wende dich an eine Fachperson, falls die Symptome anhalten.",
 );
 
+// Shared between STEPS (Profile Settings) and ONBOARDING_STEPS (the chat)
+// below, so these option lists only need to be spelled out once.
+const GOAL_OPTIONS: Option[] = [
+  { value: "lose_weight_gradually", label: bi("⚖️ Lose fat", "⚖️ Fett verlieren") },
+  { value: "maintain", label: bi("🧭 Maintain", "🧭 Halten") },
+  { value: "build_muscle", label: bi("🏋️ Build muscle", "🏋️ Muskeln aufbauen") },
+];
+const SEX_OPTIONS: Option[] = [
+  { value: "female", label: bi("Female", "Weiblich") },
+  { value: "male", label: bi("Male", "Männlich") },
+  { value: "prefer_not_to_say", label: bi("Prefer not to say", "Keine Angabe") },
+];
+const EXERCISE_OPTIONS: Option[] = [
+  { value: "none", label: bi("🛋️ Rarely / never", "🛋️ Selten / nie") },
+  { value: "one_two", label: bi("🚶 1–2× per week", "🚶 1–2× pro Woche") },
+  { value: "three_four", label: bi("🏃 3–4× per week", "🏃 3–4× pro Woche") },
+  { value: "five_six", label: bi("💪 5–6× per week", "💪 5–6× pro Woche") },
+  { value: "daily_athlete", label: bi("🏅 Daily / athlete", "🏅 Täglich / Leistungssport") },
+];
+const MOVEMENT_OPTIONS: Option[] = [
+  { value: "mostly_sitting", label: bi("🪑 Mostly sitting", "🪑 Überwiegend sitzend") },
+  { value: "mixed", label: bi("🔀 A mix of sitting & moving", "🔀 Mix aus Sitzen & Bewegen") },
+  { value: "mostly_standing", label: bi("🧍 Mostly on my feet", "🧍 Überwiegend auf den Beinen") },
+  { value: "physical_labor", label: bi("🏗️ Physical labor", "🏗️ Körperliche Arbeit") },
+];
+
 export const STEPS: StepDef[] = [
   {
     key: "name",
@@ -80,14 +112,7 @@ export const STEPS: StepDef[] = [
       "Das hilft uns zu priorisieren, was für dich am wichtigsten ist.",
     ),
     kind: "choice",
-    options: [
-      { value: "build_muscle", label: bi("🏋️ Build muscle & strength", "🏋️ Muskeln & Kraft aufbauen") },
-      { value: "more_energy", label: bi("⚡ More energy & less fatigue", "⚡ Mehr Energie & weniger Müdigkeit") },
-      { value: "lose_weight_gradually", label: bi("⚖️ Lose weight gradually", "⚖️ Schrittweise Gewicht verlieren") },
-      { value: "eat_balanced", label: bi("🥗 Eat more balanced & healthy", "🥗 Ausgewogener & gesünder essen") },
-      { value: "better_focus", label: bi("🧠 Better focus & mental clarity", "🧠 Bessere Konzentration & Klarheit") },
-      { value: "better_sleep", label: bi("😴 Better sleep & recovery", "😴 Besserer Schlaf & Erholung") },
-    ],
+    options: GOAL_OPTIONS,
     feedback: bi("Great goal — we'll build everything around it.", "Tolles Ziel — wir richten alles danach aus."),
   },
   {
@@ -125,11 +150,7 @@ export const STEPS: StepDef[] = [
       "Wird zur Berechnung deines Grundumsatzes (BMR) genutzt.",
     ),
     kind: "choice",
-    options: [
-      { value: "female", label: bi("Female", "Weiblich") },
-      { value: "male", label: bi("Male", "Männlich") },
-      { value: "prefer_not_to_say", label: bi("Prefer not to say", "Keine Angabe") },
-    ],
+    options: SEX_OPTIONS,
     feedback: bi("Thanks — this makes your targets more accurate.", "Danke — das macht deine Ziele genauer."),
   },
   {
@@ -172,13 +193,7 @@ export const STEPS: StepDef[] = [
     shortLabel: bi("Exercise frequency", "Trainingshäufigkeit"),
     category: bi("Activity", "Aktivität"),
     kind: "choice",
-    options: [
-      { value: "none", label: bi("🛋️ Rarely / never", "🛋️ Selten / nie") },
-      { value: "one_two", label: bi("🚶 1–2× per week", "🚶 1–2× pro Woche") },
-      { value: "three_four", label: bi("🏃 3–4× per week", "🏃 3–4× pro Woche") },
-      { value: "five_six", label: bi("💪 5–6× per week", "💪 5–6× pro Woche") },
-      { value: "daily_athlete", label: bi("🏅 Daily / athlete", "🏅 Täglich / Leistungssport") },
-    ],
+    options: EXERCISE_OPTIONS,
     feedback: bi("Great — this sets your energy needs.", "Super — das bestimmt deinen Energiebedarf."),
   },
   {
@@ -191,12 +206,7 @@ export const STEPS: StepDef[] = [
       "Alltagsbewegung außerhalb des Trainings (Gehen, Stehen, Hausarbeit).",
     ),
     kind: "choice",
-    options: [
-      { value: "mostly_sitting", label: bi("🪑 Mostly sitting", "🪑 Überwiegend sitzend") },
-      { value: "mixed", label: bi("🔀 A mix of sitting & moving", "🔀 Mix aus Sitzen & Bewegen") },
-      { value: "mostly_standing", label: bi("🧍 Mostly on my feet", "🧍 Überwiegend auf den Beinen") },
-      { value: "physical_labor", label: bi("🏗️ Physical labor", "🏗️ Körperliche Arbeit") },
-    ],
+    options: MOVEMENT_OPTIONS,
     feedback: bi("Thanks — every bit of movement counts.", "Danke — jede Bewegung zählt."),
   },
   {
@@ -335,6 +345,119 @@ export const STEPS: StepDef[] = [
   },
 ];
 
+// The chat's actual question set (onboardingflow_etc.md): name, then the
+// biometrics + activity + goal the Ideal Profile Engine (E2) needs to
+// compute calories and macros — nothing else. Every field here is
+// mandatory (no `optional`/`showIf`) so the Ideal Profile is always
+// computable once `goal` is answered.
+export const ONBOARDING_STEPS: StepDef[] = [
+  {
+    key: "name",
+    prompt: bi(
+      "Hi, I'm Nährbert — your companion for healthy eating, smart grocery shopping, and cooking at home. So I can address you properly from now on: what should I call you?",
+      "Hi, ich bin Nährbert, dein Helfer rund um gesunde Ernährung, smartes Einkaufen und Kochen zu Hause. Damit ich dich in Zukunft richtig ansprechen kann: Wie darf ich dich nennen?",
+    ),
+    shortLabel: bi("Name", "Name"),
+    category: bi("Personal", "Persönlich"),
+    kind: "text",
+    placeholder: bi("Your name", "Dein Name"),
+    feedback: bi(
+      "I can't replace medical advice, and I'm not a dietitian in the traditional sense — but I'll help you eat in a more balanced way so you stay healthy and reach your goals. For that, I calculate 2 Ideal Profiles: 🔥 Calories — your energy balance and body weight. 💪 Macros — to fuel performance, muscle, and metabolism. (🥦 Micros — for your body's internal systems, coming soon.) To do this I need a bit of information about you. Let's start with the baseline: we'll work out your Basal Metabolic Rate (BMR) — how many calories you need every day. The formula differs slightly by biological sex.",
+      "Auch wenn ich natürlich keinen ärztlichen Rat ersetzen kann und selbst kein Ernährungsberater im traditionellen Sinne bin, helfe ich dir dabei, dich ausgewogener zu ernähren, damit du gesund bleibst und deine Ziele erreichst. Dafür berechne ich 2 Idealprofile: 🔥 Kalorien — für deine Energiebalance und dein Körpergewicht. 💪 Makros — für Leistung, Muskeln und Stoffwechsel. (🥦 Mikros — für die Gesundheit deiner Körperfunktionen, folgt bald.) Um das zu tun, brauche ich ein paar Informationen über dich. Fangen wir mit der Baseline an: Wir berechnen deinen Grundumsatz (BMR) — er zeigt, wie viele Kalorien du täglich brauchst. Die Formel unterscheidet sich leicht je nach biologischem Geschlecht.",
+    ),
+  },
+  {
+    key: "sex",
+    prompt: bi("What sex were you assigned at birth?", "Welches Geschlecht wurde dir bei deiner Geburt zugeordnet?"),
+    shortLabel: bi("Sex at birth", "Geschlecht bei Geburt"),
+    category: bi("Personalization", "Personalisierung"),
+    hint: bi(
+      "Sorry if that sounds a little odd — being biologically male or female meaningfully affects your energy needs. If you'd rather not say, that's fine too: I'll just use the midpoint of both.",
+      "Sorry, das mag etwas komisch klingen — aber biologisch männlich oder weiblich zu sein beeinflusst deinen Verbrauch erheblich. Wenn du das nicht angeben möchtest, ist das auch okay: Dann rechne ich einfach mit der Mitte aus beidem.",
+    ),
+    kind: "choice",
+    options: SEX_OPTIONS,
+    feedback: bi(
+      "Thanks. Now let's go through the rest step by step.",
+      "Danke. Jetzt gehen wir Schritt für Schritt die restlichen Variablen durch.",
+    ),
+  },
+  {
+    key: "date_of_birth",
+    prompt: bi("When were you born?", "Wann wurdest du geboren?"),
+    shortLabel: bi("Date of birth", "Geburtsdatum"),
+    category: bi("Personalization", "Personalisierung"),
+    kind: "date",
+    feedback: bi("Perfect — your targets will stay right as you age.", "Perfekt — deine Ziele bleiben mit dem Alter aktuell."),
+  },
+  {
+    key: "height_cm",
+    prompt: bi("How tall are you, in cm?", "Wie groß bist du, in cm?"),
+    shortLabel: bi("Height (cm)", "Größe (cm)"),
+    category: bi("Personalization", "Personalisierung"),
+    placeholder: bi("e.g. 170", "z.B. 170"),
+    kind: "number",
+    feedback: bi("Thanks!", "Danke!"),
+  },
+  {
+    key: "weight_kg",
+    prompt: bi("And how much do you weigh, in kg?", "Und wie viel wiegst du, in kg?"),
+    shortLabel: bi("Weight (kg)", "Gewicht (kg)"),
+    category: bi("Personalization", "Personalisierung"),
+    placeholder: bi("e.g. 68", "z.B. 68"),
+    kind: "number",
+    // Static fallback shown until the freshly-computed BMR arrives (see
+    // the `weight_kg`-specific reveal in the render code below), and as
+    // the permanent copy if the request is still in flight when the
+    // history re-renders.
+    feedback: bi("Cool, thanks. Let me do some quick math…", "Cool, danke dir. Lass mich kurz rechnen…"),
+  },
+  {
+    key: "exercise_frequency",
+    prompt: bi(
+      "That's not all — depending on your goal and activity, we'll now adjust your BMR into your Total Daily Energy Expenditure (TDEE). How often do you currently exercise per week?",
+      "Das ist noch nicht alles: Abhängig von deinem Ziel und deiner Aktivität passen wir deinen Grundumsatz jetzt noch auf deinen Gesamtenergiebedarf (TDEE) an. Wie oft machst du aktuell Sport pro Woche?",
+    ),
+    shortLabel: bi("Exercise frequency", "Trainingshäufigkeit"),
+    category: bi("Activity", "Aktivität"),
+    hint: bi(
+      "Depending on your activity level, we add up to 600 kcal per day to your needs.",
+      "Je nach Aktivitätslevel fügen wir bis zu 600 kcal pro Tag zu deinem Bedarf hinzu.",
+    ),
+    kind: "choice",
+    options: EXERCISE_OPTIONS,
+    feedback: bi("Great — this sets your energy needs.", "Super — das bestimmt deinen Energiebedarf."),
+  },
+  {
+    key: "daily_movement",
+    prompt: bi("And what does your day-to-day look like?", "Und wie sieht dein Alltag aus?"),
+    shortLabel: bi("Daily movement", "Alltagsbewegung"),
+    category: bi("Activity", "Aktivität"),
+    hint: bi(
+      "Depending on your daily routine, we multiply your calorie needs by up to 1.35×.",
+      "Je nach Alltagssituation multiplizieren wir deinen Kalorienbedarf um bis zu 1,35×.",
+    ),
+    kind: "choice",
+    options: MOVEMENT_OPTIONS,
+    feedback: bi("Thanks — every bit of movement counts.", "Danke — jede Bewegung zählt."),
+  },
+  {
+    key: "goal",
+    prompt: bi(
+      "And one last thing: which of these goals fits you best?",
+      "Und jetzt noch: Welches dieser Ziele trifft am ehesten auf dich zu?",
+    ),
+    shortLabel: bi("Goal", "Ziel"),
+    category: bi("Goal", "Ziel"),
+    hint: bi(
+      "Depending on your choice, we'll lower your daily target, keep it the same, or raise it.",
+      "Je nach Auswahl verringern wir deinen Tagesbedarf, belassen ihn gleich oder steigern ihn.",
+    ),
+    kind: "choice",
+    options: GOAL_OPTIONS,
+  },
+];
+
 const SKIP_LABEL = bi(
   "Skip for now (use a neutral profile with no exclusions)",
   "Für jetzt überspringen (neutrales Profil ohne Ausschlüsse)",
@@ -347,6 +470,7 @@ const CREATING_LABEL = bi(
   "Alles klar — dein Profil wird gespeichert, danach lädst du deinen ersten Kassenbon hoch…",
 );
 const CREATE_PROFILE_FAILED = bi("Could not save profile.", "Profil konnte nicht gespeichert werden.");
+const CONTINUE_TO_UPLOAD_LABEL = bi("Let's go →", "Los geht's →");
 const BADGE_LABEL = bi("PERSONALIZING YOUR PLAN", "DEIN PLAN WIRD PERSONALISIERT");
 const TITLE_LINE_1 = bi("Let's get to know", "Lass uns dich");
 const TITLE_LINE_2 = bi("you.", "kennenlernen.");
@@ -382,7 +506,7 @@ type Answers = {
 const INITIAL_ANSWERS: Answers = {
   name: "",
   form_of_address: "neutral",
-  goal: "eat_balanced",
+  goal: "maintain",
   dietary_pattern: "omnivore",
   sex: "",
   date_of_birth: "",
@@ -502,6 +626,29 @@ function rangeError(key: string, value: string): Bi | null {
   if ((key === "meals_per_day" || key === "snacks_per_day") && (n < 0 || n > 12)) return RANGE_ERROR;
   return null;
 }
+
+// Dynamic reveal shown right after `weight_kg` is answered — by then
+// sex/date_of_birth/height/weight are all known, so the BMR the backend
+// just computed (Mifflin-St Jeor, BR-E1) is already real, not a preview.
+function bmrRevealText(ideal: IdealProfile, lang: Lang): string {
+  return lang === "de"
+    ? `Dein BMR ist: ${ideal.bmr_kcal} kcal.`
+    : `Your BMR is: ${ideal.bmr_kcal} kcal.`;
+}
+
+// Final reveal after `goal` is answered — the Ideal Profile Engine (E2)
+// now has everything it needs, so calories/macros are the real computed
+// targets, not placeholders.
+function idealProfileRevealText(ideal: IdealProfile, lang: Lang): string {
+  return lang === "de"
+    ? `Dein durchschnittlicher idealer Kalorienverbrauch pro Tag liegt bei etwa ${ideal.calories_kcal} kcal. Außerdem sollten deine Makronährwerte idealerweise so verteilt sein: ${ideal.carbs_g}g Kohlenhydrate, ${ideal.protein_g}g Proteine, ${ideal.fat_g}g Fette. Sollte sich an deinen Angaben etwas ändern, kannst du diese jederzeit über dein Profil-Icon oben rechts anpassen.`
+    : `Your average ideal calorie intake per day is about ${ideal.calories_kcal} kcal. Your macros should ideally be split like this: ${ideal.carbs_g}g carbs, ${ideal.protein_g}g protein, ${ideal.fat_g}g fat. If anything about you changes, you can always adjust these later via your profile icon, top right.`;
+}
+
+const UNLOCK_NEXT_LEVEL_TEXT = bi(
+  "Great — that's everything I need to get started. To unlock the next level of the app, upload as many receipts as you can now — ideally as a digital receipt from a supermarket loyalty app, or clean, upright photos. Once you've uploaded 50 food items, you're through.",
+  "Super, dann habe ich für den Start erstmal alles von dir, was ich brauche. Um das nächste Level der App freizuschalten, lade jetzt bitte so viele Kassenzettel wie möglich hoch — im Idealfall als digitalen Bon aus einer Supermarkt-Loyalitäts-App oder als saubere, gerade Fotos. Sobald du auf 50 hochgeladene Lebensmittel kommst, geht's weiter.",
+);
 
 function BotAvatar() {
   return (
@@ -671,21 +818,35 @@ export function ChatOnboardingStep({
     resumeProfile ? profileToAnswers(resumeProfile) : INITIAL_ANSWERS,
   );
   const [draftText, setDraftText] = useState("");
-  const [saving, setSaving] = useState(false);
+  // "chat": answering questions. "saving": final submit in flight.
+  // "reveal": submit succeeded — showing the computed calories/macros and
+  // the hand-off to the baseline receipt upload.
+  const [phase, setPhase] = useState<"chat" | "saving" | "reveal">("chat");
   const [error, setError] = useState<string | null>(null);
   const [inputError, setInputError] = useState<Bi | null>(null);
   const [showWhy, setShowWhy] = useState(false);
   const [editingKey, setEditingKey] = useState<string | null>(null);
+  // The Ideal Profile Engine's (E2) output as of the last save — populated
+  // as soon as sex/date_of_birth/height/weight are all known (even before
+  // exercise/movement/goal are answered, since those default sensibly),
+  // so the BMR reveal right after `weight_kg` is already the real number.
+  const [latestIdeal, setLatestIdeal] = useState<IdealProfile | null>(
+    resumeProfile?.ideal_profile ?? null,
+  );
+  const [revealName, setRevealName] = useState<string | null>(null);
   const { language } = useLanguage();
   const lang: Lang = language;
   const historyRef = useRef<HTMLDivElement>(null);
   const chatRef = useRef<HTMLDivElement>(null);
   const savedIdRef = useRef<string | null>(resumeProfileId ?? null);
 
-  // Steps visible for the current answers (pregnancy only for female).
-  const visibleSteps = STEPS.filter((s) => !s.showIf || s.showIf(answers));
+  const busy = phase !== "chat";
 
-  // Resume at the first unanswered visible step (E1-S6).
+  // The chat's fixed 8-question set (onboardingflow_etc.md) — none are
+  // conditional, but `showIf` stays supported for parity with STEPS.
+  const visibleSteps = ONBOARDING_STEPS.filter((s) => !s.showIf || s.showIf(answers));
+
+  // Resume at the first unanswered step (E1-S6).
   const firstUnanswered = () => {
     const idx = visibleSteps.findIndex((s) => {
       const v = answers[s.key as keyof Answers];
@@ -696,7 +857,7 @@ export function ChatOnboardingStep({
   };
   const [stepIndex, setStepIndex] = useState<number>(resumeProfile ? firstUnanswered() : 0);
 
-  const done = saving;
+  const done = phase !== "chat";
   const current = visibleSteps[Math.min(stepIndex, visibleSteps.length - 1)];
 
   // Prefill DOB from the age-gate value captured at sign-up (reconciles
@@ -726,19 +887,47 @@ export function ChatOnboardingStep({
 
   // Best-effort incremental persistence so progress survives a reload /
   // relogin (E1-S6). Failures are swallowed here — the authoritative save
-  // is the final submit().
+  // is the final submit(). Also captures the freshly-computed Ideal
+  // Profile (E2) as soon as the backend can produce one (sex/dob/height/
+  // weight all set) — see the BMR reveal after `weight_kg` below.
   async function persistProgress(next: Answers) {
     try {
       const payload = { ...toProfileCreate(next, language), profile_complete: false };
-      if (savedIdRef.current) {
-        await updateProfile(savedIdRef.current, payload);
-      } else {
-        const created = await createProfile(payload as ProfileCreate);
-        savedIdRef.current = created.profile_id;
-      }
+      const saved = savedIdRef.current
+        ? await updateProfile(savedIdRef.current, payload)
+        : await createProfile(payload as ProfileCreate);
+      savedIdRef.current = saved.profile_id;
+      setLatestIdeal(saved.ideal_profile ?? null);
     } catch {
       // ignore — retried implicitly on the next answer, and on submit
     }
+  }
+
+  function saveEdit(key: string, value: string | string[]) {
+    setAnswers((prev) => ({ ...prev, [key]: value }));
+    setEditingKey(null);
+  }
+
+  async function submit(finalAnswers: Answers) {
+    setPhase("saving");
+    setError(null);
+    try {
+      const payload = { ...toProfileCreate(finalAnswers, language), profile_complete: true };
+      const p = savedIdRef.current
+        ? await updateProfile(savedIdRef.current, payload)
+        : await createProfile(payload as ProfileCreate);
+      savedIdRef.current = p.profile_id;
+      setLatestIdeal(p.ideal_profile ?? null);
+      setRevealName(p.name ?? finalAnswers.name ?? null);
+      setPhase("reveal");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : CREATE_PROFILE_FAILED[language]);
+      setPhase("chat");
+    }
+  }
+
+  function handleContinueToUpload() {
+    if (savedIdRef.current) onProfileCreated(savedIdRef.current, revealName);
   }
 
   function advance(next: Answers) {
@@ -750,33 +939,12 @@ export function ChatOnboardingStep({
     setStepIndex((i) => i + 1);
   }
 
-  function saveEdit(key: string, value: string | string[]) {
-    setAnswers((prev) => ({ ...prev, [key]: value }));
-    setEditingKey(null);
-  }
-
-  async function submit(finalAnswers: Answers) {
-    setSaving(true);
-    setError(null);
-    try {
-      const payload = { ...toProfileCreate(finalAnswers, language), profile_complete: true };
-      if (savedIdRef.current) {
-        const p = await updateProfile(savedIdRef.current, payload);
-        onProfileCreated(savedIdRef.current, p.name ?? finalAnswers.name ?? null);
-      } else {
-        const p = await createProfile(payload as ProfileCreate);
-        onProfileCreated(p.profile_id, p.name ?? null);
-      }
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : CREATE_PROFILE_FAILED[language]);
-      setSaving(false);
-    }
-  }
-
   function goNext(nextAnswers: Answers) {
-    // Recompute visibility with the just-set answer (e.g. sex) so a newly
-    // hidden/shown pregnancy step is accounted for.
-    const nextVisible = STEPS.filter((s) => !s.showIf || s.showIf(nextAnswers));
+    const nextVisible = ONBOARDING_STEPS.filter((s) => !s.showIf || s.showIf(nextAnswers));
+    // Deliberately does NOT advance `stepIndex` on the final step: if
+    // submit() fails, phase reverts to "chat" and `current` must still be
+    // `goal` (not past it) so the retry re-shows the right question
+    // without duplicating it in the answered history below.
     if (stepIndex >= nextVisible.length - 1) {
       submit(nextAnswers);
     } else {
@@ -816,7 +984,10 @@ export function ChatOnboardingStep({
     goNext(answers);
   }
 
-  const answeredSteps = visibleSteps.slice(0, stepIndex);
+  // Once saving/revealed, `goal` (the last step) is answered too even
+  // though `stepIndex` itself never advanced past it (see goNext above) —
+  // show the full history rather than dropping the final Q&A.
+  const answeredSteps = phase === "chat" ? visibleSteps.slice(0, stepIndex) : visibleSteps;
   const progressPct = Math.round(
     (Math.min(stepIndex, visibleSteps.length) / visibleSteps.length) * 100,
   );
@@ -870,6 +1041,11 @@ export function ChatOnboardingStep({
                       {step.feedback ? (
                         <ChatBubble from="bot">{step.feedback[language]}</ChatBubble>
                       ) : null}
+                      {/* Dynamic BMR reveal — pops in once the backend has
+                          computed it (sex/dob/height/weight all known). */}
+                      {step.key === "weight_kg" && latestIdeal ? (
+                        <ChatBubble from="bot">{bmrRevealText(latestIdeal, language)}</ChatBubble>
+                      ) : null}
                       {!done ? (
                         <button
                           type="button"
@@ -887,7 +1063,7 @@ export function ChatOnboardingStep({
           ) : null}
 
           <div className={cn("space-y-1", answeredSteps.length > 0 && "border-t border-black/5 pt-4")}>
-            {!done ? (
+            {phase === "chat" ? (
               <>
                 <ChatBubble from="bot">{current.prompt[lang]}</ChatBubble>
                 {current.hint ? <p className="pl-9 text-xs text-ink/40">{current.hint[lang]}</p> : null}
@@ -911,10 +1087,27 @@ export function ChatOnboardingStep({
                   </div>
                 ) : null}
               </>
-            ) : (
+            ) : phase === "saving" ? (
               <ChatBubble from="bot">{CREATING_LABEL[lang]}</ChatBubble>
+            ) : (
+              // Final reveal (E2): the Ideal Profile Engine's calorie/macro
+              // targets, then the hand-off to the baseline receipt upload.
+              <div className="space-y-2">
+                {latestIdeal ? (
+                  <ChatBubble from="bot">{idealProfileRevealText(latestIdeal, lang)}</ChatBubble>
+                ) : null}
+                <ChatBubble from="bot">{UNLOCK_NEXT_LEVEL_TEXT[lang]}</ChatBubble>
+              </div>
             )}
           </div>
+
+          {phase === "reveal" ? (
+            <div className="border-t border-black/5 pt-4">
+              <PrimaryButton type="button" onClick={handleContinueToUpload}>
+                {CONTINUE_TO_UPLOAD_LABEL[lang]}
+              </PrimaryButton>
+            </div>
+          ) : null}
 
           {!done ? (
             <div className="space-y-3 border-t border-black/5 pt-4">
@@ -924,7 +1117,7 @@ export function ChatOnboardingStep({
                     <button
                       key={opt.value}
                       type="button"
-                      disabled={saving}
+                      disabled={busy}
                       onClick={() => handleChoice(opt.value)}
                       className="rounded-xl bg-zinc-50 px-4 py-2.5 text-sm font-medium tracking-tight text-ink/70 ring-1 ring-black/5 transition-colors hover:bg-ink hover:text-canvas disabled:opacity-40"
                     >
@@ -954,7 +1147,7 @@ export function ChatOnboardingStep({
                       );
                     })}
                   </div>
-                  <PrimaryButton type="button" disabled={saving} onClick={handleMultiContinue}>
+                  <PrimaryButton type="button" disabled={busy} onClick={handleMultiContinue}>
                     {CONTINUE_LABEL[lang]}
                   </PrimaryButton>
                 </div>
@@ -977,7 +1170,7 @@ export function ChatOnboardingStep({
                     />
                     <button
                       type="button"
-                      disabled={saving}
+                      disabled={busy}
                       onClick={handleTextSubmit}
                       className="shrink-0 rounded-xl bg-ink px-5 py-3 text-sm font-medium tracking-tight text-canvas disabled:opacity-40"
                     >
@@ -1010,13 +1203,15 @@ export function ChatOnboardingStep({
         <div className="rounded-2xl bg-red-50 px-5 py-4 text-sm text-red-700 ring-1 ring-red-200">{error}</div>
       ) : null}
 
-      <button
-        type="button"
-        onClick={onSkip}
-        className="block w-full text-center text-xs font-medium tracking-tight text-ink/50 hover:text-ink"
-      >
-        {SKIP_LABEL[lang]}
-      </button>
+      {phase === "chat" ? (
+        <button
+          type="button"
+          onClick={onSkip}
+          className="block w-full text-center text-xs font-medium tracking-tight text-ink/50 hover:text-ink"
+        >
+          {SKIP_LABEL[lang]}
+        </button>
+      ) : null}
     </section>
   );
 

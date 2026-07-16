@@ -28,7 +28,7 @@ def _load_profile(profile_id: Optional[str], user_id: str) -> Optional[Profile]:
 
 
 @router.get("/nutrition/snapshot")
-def nutrition_snapshot(profile_id: Optional[str] = None, user_id: str = Depends(get_current_user)):
+def nutrition_snapshot(profile_id: Optional[str] = None, lang: str = "en", user_id: str = Depends(get_current_user)):
     """
     Aggregated nutrition snapshot + top gaps across this session's saved
     receipts (Epic 4, scoped per Story 8.3). Density-based, rule-driven,
@@ -59,7 +59,7 @@ def nutrition_snapshot(profile_id: Optional[str] = None, user_id: str = Depends(
             print(f"[api] profile {profile_id} failed validation (stale schema?) — continuing without personalization")
             profile = None
 
-    snapshot = build_snapshot_from_db(user_id, user_profile=profile)
+    snapshot = build_snapshot_from_db(user_id, user_profile=profile, lang=lang)
     if snapshot.items_analyzed == 0:
         raise HTTPException(
             status_code=409,
@@ -70,14 +70,14 @@ def nutrition_snapshot(profile_id: Optional[str] = None, user_id: str = Depends(
     # density-based `gaps` above since they compare real daily units
     # against confirmed pantry consumption, not a receipt's basket
     # ratios. [] until the user has confirmed any consumption/removal.
-    absolute_gaps = detect_absolute_gaps(user_id, profile)
-    health_score = compute_health_score(snapshot.dimensions, absolute_gaps)
+    absolute_gaps = detect_absolute_gaps(user_id, profile, lang)
+    health_score = compute_health_score(snapshot.dimensions, absolute_gaps, lang)
 
     # Purchased items that conflict with the profile (e.g. meat bought by
     # a self-described vegan) — [] without a profile to check against.
     # Never changes the profile or the analysis itself; just surfaced so
     # the user can clarify (see conflict_detector.py's docstring).
-    conflicts = detect_conflicts(user_id, profile)
+    conflicts = detect_conflicts(user_id, profile, lang)
 
     return {
         "user_id": user_id,

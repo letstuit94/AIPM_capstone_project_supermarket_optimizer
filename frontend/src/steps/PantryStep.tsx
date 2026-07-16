@@ -14,6 +14,7 @@ import {
   consumePantryItem,
   ApiError,
 } from "@/lib/api";
+import { EatenFeedbackCard } from "@/steps/EatenFeedbackCard";
 
 const ACCEPT = "image/jpeg,image/png,image/webp,application/pdf";
 import type { PantryItem, UploadReceiptResponse, PantryMatch } from "@/types/api";
@@ -523,7 +524,9 @@ export function PantryStep({
 
   async function loadPantryMatch() {
     try {
-      const rec = await getNextCart(profileId ?? undefined);
+      // include_coach=false: this page only shows pantry_match, so there's
+      // no reason to spend a Gemini coach request here.
+      const rec = await getNextCart(profileId ?? undefined, false);
       setPantryMatch(rec.pantry_match);
     } catch {
       // 409 (no receipts analysed yet) is a normal, common state here —
@@ -584,6 +587,11 @@ export function PantryStep({
           }}
         />
       ) : null}
+
+      {/* E10 variant A: before uploading the next shop, ask what became of
+          the previous one (self-gates to variant-A users with a prior
+          receipt; renders nothing otherwise). */}
+      <EatenFeedbackCard surface="A" />
 
       <UploadSection
         onUploaded={(receiptId) => {

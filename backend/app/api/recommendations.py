@@ -23,7 +23,7 @@ router = APIRouter()
 
 
 @router.get("/recommendations")
-def structured_recommendations(profile_id: Optional[str] = None, user_id: str = Depends(get_current_user)):
+def structured_recommendations(profile_id: Optional[str] = None, lang: str = "en", user_id: str = Depends(get_current_user)):
     """
     Epic 8 Next-Cart engine: candidates scored against the E7 analysis
     (severity × confidence × symptom × goal, BR-S1), filtered by
@@ -59,12 +59,17 @@ def structured_recommendations(profile_id: Optional[str] = None, user_id: str = 
     analysis = build_analysis(compute_ideal_profile(profile), status_quo.daily_intake, confidence)
     analysis["grouping"] = group_products(matched)
 
-    result = build_next_cart(analysis, profile)
+    result = build_next_cart(analysis, profile, lang)
     return {"user_id": user_id, **result.model_dump()}
 
 
 @router.get("/next-cart")
-def next_cart(profile_id: Optional[str] = None, user_id: str = Depends(get_current_user)):
+def next_cart(
+    profile_id: Optional[str] = None,
+    include_coach: bool = True,
+    lang: str = "en",
+    user_id: str = Depends(get_current_user),
+):
     """
     The single Next Cart recommendation (Epic 5), grounded in the
     aggregated gaps from Epic 4 across this session's saved receipts
@@ -73,6 +78,12 @@ def next_cart(profile_id: Optional[str] = None, user_id: str = Depends(get_curre
 
     profile_id is optional: without one, a neutral no-exclusions profile
     is used so the endpoint still works before onboarding is complete.
+
+    `include_coach` (default True): compute the LLM Nutri-Coach message.
+    Callers that don't display it (the Pantry page only reads
+    `pantry_match`) pass `include_coach=false` to skip the coach entirely
+    — no wasted Gemini request for a field they never show. When false,
+    `coach_message` comes back as an empty string.
 
     The computed recommendation is persisted (Task 8.5) so feedback
     (Task 8.2) has a stable `recommendation_id` to reference — otherwise
@@ -102,7 +113,7 @@ def next_cart(profile_id: Optional[str] = None, user_id: str = Depends(get_curre
     # Profile loaded first (not after, as before) so its gaps and the
     # recommendation below use the same personalized protein reference —
     # see nutrition_personalization.py — instead of two different ones.
-    snapshot = build_snapshot_from_db(user_id, user_profile=profile)
+    snapshot = build_snapshot_from_db(user_id, user_profile=profile, lang=lang)
     if snapshot.items_analyzed == 0:
         raise HTTPException(
             status_code=409,
@@ -114,7 +125,7 @@ def next_cart(profile_id: Optional[str] = None, user_id: str = Depends(get_curre
     # based confidence here aren't on comparable scales, so density gaps
     # keep priority unless a Q6 symptom boosts iron specifically (see
     # _SYMPTOM_PRIORITY_BOOST in recommender.py).
-    absolute_gaps = detect_absolute_gaps(user_id, profile)
+    absolute_gaps = detect_absolute_gaps(user_id, profile, lang)
     gaps = list(snapshot.gaps) + [gap_from_absolute(g) for g in absolute_gaps]
 
     recommendation = recommend_next_cart(
@@ -122,11 +133,12 @@ def next_cart(profile_id: Optional[str] = None, user_id: str = Depends(get_curre
         profile=profile,
         confidence=snapshot.confidence,
         user_id=user_id,
+        lang=lang,
     )
     # NutriWise Agent - modified: added for Progress Tracking (addendum).
     # has_history=False (not an error) when this session only has one
     # receipt so far, so Next Cart still works before any history exists.
-    recommendation.progress = compute_session_progress(user_id)
+    recommendation.progress = compute_session_progress(user_id, lang)
 
     recommendation_id = str(uuid4())
     payload = recommendation.model_dump(mode="json")
@@ -148,27 +160,27 @@ def next_cart(profile_id: Optional[str] = None, user_id: str = Depends(get_curre
         pantry_item_names = [item["normalized_name"] for item in pantry_items]
         pantry_recipes = [
             recipe.model_dump()
-            for recipe in suggest_recipes_from_pantry(pantry_item_names, absolute_gaps[0])
+            for recipe in suggest_recipes_from_pantry(pantry_item_names, absolute_gaps[0], lang)
         ]
 
     # "Use what you already have" — shown alongside (never instead of)
     # the purchase recommendation above, so the user can choose either
     # (docs/architektur_entscheidungen.md, ToDo 2).
-    pantry_match = find_pantry_match(gaps, pantry_items, profile, user_id=user_id)
+    pantry_match = find_pantry_match(gaps, pantry_items, profile, user_id=user_id, lang=lang)
 
     # Easy, low-effort/cheap/in-season swaps across every flagged gap —
     # a broader supplementary list alongside the one deliberate Next
     # Cart pick above (see services/easy_swaps.py).
     easy_swaps = [
         swap.model_dump()
-        for swap in suggest_easy_swaps(gaps, profile, datetime.now(timezone.utc).month)
+        for swap in suggest_easy_swaps(gaps, profile, datetime.now(timezone.utc).month, lang=lang)
     ]
 
     # Nutri-Coach: a warm, conversational phrasing of everything already
     # computed above — the LLM only rephrases these facts, it never adds
     # new ones (see services/nutri_coach.py). Falls back to a rule-based
     # template on any Gemini failure, so this can never break Next Cart.
-    health_score = compute_health_score(snapshot.dimensions, absolute_gaps)
+    health_score = compute_health_score(snapshot.dimensions, absolute_gaps, lang)
     coach_context = {
         "health_score": health_score.model_dump(),
         "top_gaps": [
@@ -187,8 +199,16 @@ def next_cart(profile_id: Optional[str] = None, user_id: str = Depends(get_curre
         ],
         "progress_trend": recommendation.progress.trend if recommendation.progress else None,
     }
-    language = profile.language.value if getattr(profile, "language", None) else "en"
-    coach_message = generate_coach_message(coach_context, language=language)
+    # #5: only spend a Gemini request on the coach when the caller will
+    # actually show it (Overview / Notifications). The Pantry page reads
+    # only `pantry_match`, so it opts out with include_coach=false.
+    if include_coach:
+        # E13: the request `lang` is authoritative for what the user is
+        # currently viewing (it follows the header toggle), so the coach
+        # follows suit rather than a possibly-stale profile.language.
+        coach_message = generate_coach_message(coach_context, language=lang)
+    else:
+        coach_message = ""
 
     return {
         "recommendation_id": recommendation_id,

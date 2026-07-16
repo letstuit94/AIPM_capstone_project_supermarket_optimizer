@@ -45,7 +45,7 @@ def test_goal_relevance():
     check("build muscle → carbs ×1.2", nce.goal_relevance(Goal.BUILD_MUSCLE, "carbs"), 1.2)
     check("lose fat → protein ×1.4", nce.goal_relevance(Goal.LOSE_WEIGHT_GRADUALLY, "protein"), 1.4)
     check("lose fat → fiber ×1.3", nce.goal_relevance(Goal.LOSE_WEIGHT_GRADUALLY, "fiber"), 1.3)
-    check("maintain → protein ×1.1", nce.goal_relevance(Goal.EAT_BALANCED, "protein"), 1.1)
+    check("maintain → protein ×1.1", nce.goal_relevance(Goal.MAINTAIN, "protein"), 1.1)
     check("unlisted nutrient → 1.0", nce.goal_relevance(Goal.BUILD_MUSCLE, "fiber"), 1.0)
 
 

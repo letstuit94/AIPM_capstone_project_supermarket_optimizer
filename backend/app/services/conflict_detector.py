@@ -66,7 +66,7 @@ def _tags_for_name(name: str) -> set:
     return tags
 
 
-def detect_conflicts(user_id: str, profile: Optional[ProfileLike]) -> List[Conflict]:
+def detect_conflicts(user_id: str, profile: Optional[ProfileLike], lang: str = "en") -> List[Conflict]:
     """
     Every purchased item (across this session's receipts) that conflicts
     with the profile's dietary pattern, allergies, or dislikes — [] if
@@ -95,7 +95,7 @@ def detect_conflicts(user_id: str, profile: Optional[ProfileLike]) -> List[Confl
         # diet-pattern tag at all. Always check; an empty tag set just
         # means the dietary-pattern check has nothing to match against.
         tags = _tags_for_name(name)
-        result = check_candidate(profile, ExclusionCandidate(name=name, tags=list(tags)))
+        result = check_candidate(profile, ExclusionCandidate(name=name, tags=list(tags)), lang)
         if result.allowed:
             continue
 

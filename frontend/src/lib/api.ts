@@ -12,14 +12,29 @@ import type {
   ReceiptDetailResponse,
   ReceiptItemUpdate,
   ReceiptRow,
+  ReceiptUploadProgress,
   UploadReceiptResponse,
   ProductSearchResult,
   ItemMatchPick,
   NutritionAnalysis,
   StructuredNextCart,
   Level2Payload,
+  ConsumptionContext,
+  ConsumptionFeedbackPayload,
+  ConsumptionFeedbackResult,
 } from "@/types/api";
 import { supabase } from "@/lib/supabase";
+import { getStoredLanguage } from "@/lib/i18n";
+
+// E13: the backend localizes its generated prose (gaps, recommendations,
+// coach, disclaimers) to the language passed here. We send the user's
+// active UI language so backend text matches the rest of the app.
+function withLangQuery(profileId?: string): string {
+  const p = new URLSearchParams();
+  if (profileId) p.set("profile_id", profileId);
+  p.set("lang", getStoredLanguage());
+  return `?${p.toString()}`;
+}
 
 // Strip any trailing slash(es): every call below builds URLs as
 // `${API_BASE}/path`, so a base like "http://localhost:8000/" (a common
@@ -175,6 +190,20 @@ export async function flagNoMatch(
   return handle(res);
 }
 
+// E3-S4 follow-up: mark a mis-classified line as non-food. Excludes it from
+// nutrition matching, removes its quantity from the pantry, and teaches the
+// system so future receipts with the same line are stripped automatically.
+export async function markItemNonFood(
+  receiptId: string,
+  itemId: string,
+): Promise<{ receipt_id: string; item_id: string; category: string }> {
+  const res = await fetch(`${API_BASE}/receipts/${receiptId}/items/${itemId}/non-food`, {
+    method: "POST",
+    headers: await authHeader(),
+  });
+  return handle(res);
+}
+
 // E7: ideal-vs-status-quo gap analysis, health score, grouping, confidence.
 export async function getAnalysis(profileId?: string): Promise<NutritionAnalysis> {
   const q = profileId ? `?profile_id=${encodeURIComponent(profileId)}` : "";
@@ -184,8 +213,7 @@ export async function getAnalysis(profileId?: string): Promise<NutritionAnalysis
 
 // E8: structured Next-Cart recommendations (1 primary + ≤2 alternatives + ≤2 reduce).
 export async function getRecommendations(profileId?: string): Promise<StructuredNextCart> {
-  const q = profileId ? `?profile_id=${encodeURIComponent(profileId)}` : "";
-  const res = await fetch(`${API_BASE}/recommendations${q}`, { headers: await authHeader() });
+  const res = await fetch(`${API_BASE}/recommendations${withLangQuery(profileId)}`, { headers: await authHeader() });
   return handle<StructuredNextCart>(res);
 }
 
@@ -202,6 +230,13 @@ export async function submitLevel2(profileId: string, payload: Level2Payload): P
 export async function listReceipts(): Promise<{ user_id: string; receipts: ReceiptRow[] }> {
   const res = await fetch(`${API_BASE}/receipts`, { headers: await authHeader() });
   return handle<{ user_id: string; receipts: ReceiptRow[] }>(res);
+}
+
+// E1 onboarding upload gate: how many food items this user has uploaded so
+// far, across every receipt, vs. the target that unlocks the rest of the app.
+export async function getReceiptUploadProgress(): Promise<ReceiptUploadProgress> {
+  const res = await fetch(`${API_BASE}/receipts/progress`, { headers: await authHeader() });
+  return handle<ReceiptUploadProgress>(res);
 }
 
 export async function getReceipt(receiptId: string): Promise<ReceiptDetailResponse> {
@@ -270,11 +305,35 @@ export async function deleteProfile(profileId: string): Promise<{ profile_id: st
   return handle<{ profile_id: string; deleted: boolean }>(res);
 }
 
+// --- GDPR: export + account erasure (E12) --------------------------------
+
+// FR-12.4 / BR-P3 portability: the full personal-data bundle (profile,
+// receipts + items, derived ideal profile) as a plain JSON object.
+export async function exportMyData(): Promise<unknown> {
+  const res = await fetch(`${API_BASE}/profile/me/export`, { headers: await authHeader() });
+  return handle<unknown>(res);
+}
+
+// FR-12.3 / BR-P3 erasure: hard cascade-delete all personal data + the auth
+// user. The caller signs out afterwards (the token is invalid once done).
+export async function deleteAccount(): Promise<{
+  user_id: string;
+  receipts_deleted: number;
+  verified_votes_removed: number;
+  auth_user_deleted: boolean;
+  errors: string[];
+}> {
+  const res = await fetch(`${API_BASE}/account`, {
+    method: "DELETE",
+    headers: await authHeader(),
+  });
+  return handle(res);
+}
+
 // --- Nutrition snapshot --------------------------------------------------
 
 export async function getNutritionSnapshot(profileId?: string): Promise<NutritionSnapshot> {
-  const query = profileId ? `?profile_id=${encodeURIComponent(profileId)}` : "";
-  const res = await fetch(`${API_BASE}/nutrition/snapshot${query}`, { headers: await authHeader() });
+  const res = await fetch(`${API_BASE}/nutrition/snapshot${withLangQuery(profileId)}`, { headers: await authHeader() });
   return handle<NutritionSnapshot>(res);
 }
 
@@ -346,9 +405,18 @@ export async function removePantryItem(
 
 // --- Next Cart -----------------------------------------------------------
 
-export async function getNextCart(profileId?: string): Promise<NextCartRecommendation> {
-  const query = profileId ? `?profile_id=${encodeURIComponent(profileId)}` : "";
-  const res = await fetch(`${API_BASE}/next-cart${query}`, { headers: await authHeader() });
+// `includeCoach` (default true): set false when the caller doesn't display
+// the coach message (e.g. the Pantry page, which only needs pantry_match) —
+// the backend then skips the Gemini call entirely (coach_message = "").
+export async function getNextCart(
+  profileId?: string,
+  includeCoach = true,
+): Promise<NextCartRecommendation> {
+  const params = new URLSearchParams();
+  if (profileId) params.set("profile_id", profileId);
+  if (!includeCoach) params.set("include_coach", "false");
+  params.set("lang", getStoredLanguage());  // E13: localize backend prose
+  const res = await fetch(`${API_BASE}/next-cart?${params.toString()}`, { headers: await authHeader() });
   return handle<NextCartRecommendation>(res);
 }
 
@@ -361,4 +429,24 @@ export async function submitFeedback(feedback: FeedbackCreate): Promise<Feedback
     body: JSON.stringify(feedback),
   });
   return handle<Feedback>(res);
+}
+
+// --- Epic 10: Eaten / consumption feedback (A/B) -------------------------
+
+// Sticky variant + the prior receipt to give feedback on (null → no prompt).
+export async function getConsumptionContext(): Promise<ConsumptionContext> {
+  const res = await fetch(`${API_BASE}/consumption/context`, { headers: await authHeader() });
+  return handle<ConsumptionContext>(res);
+}
+
+// Record eaten-feedback ("thrown away" → waste_fraction); recomputes status-quo.
+export async function submitConsumptionFeedback(
+  payload: ConsumptionFeedbackPayload,
+): Promise<ConsumptionFeedbackResult> {
+  const res = await fetch(`${API_BASE}/consumption/feedback`, {
+    method: "POST",
+    headers: await jsonHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return handle<ConsumptionFeedbackResult>(res);
 }

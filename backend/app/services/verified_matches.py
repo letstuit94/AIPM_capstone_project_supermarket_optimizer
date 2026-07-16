@@ -236,6 +236,33 @@ def lookup_verified_match(raw_text: str, store: Optional[str] = None) -> Optiona
     return None
 
 
+def delete_user_votes(user_id: str) -> int:
+    """
+    E12-S3: remove this user's verified-match votes on account erasure.
+
+    The de-identified aggregate (the winning product per key) is RETAINED
+    (BR-P3): we only drop rows carrying this user's id, never other users'
+    votes — so a key that still has votes from others keeps resolving, and
+    only a key that was solely this user's naturally stops (correct: no
+    personal data, no phantom mapping). Returns the number of votes removed
+    (0 on the Supabase path, which doesn't report a count).
+    """
+
+    if _LOCAL:
+        rows = _load(_VOTES_PATH)
+        kept = [r for r in rows if r.get("user_id") != user_id]
+        removed = len(rows) - len(kept)
+        _save(_VOTES_PATH, kept)
+        return removed
+
+    try:
+        from backend.app.db.supabase import delete_verified_votes_by_user
+        delete_verified_votes_by_user(user_id)
+    except Exception:
+        pass
+    return 0
+
+
 def log_no_match(raw_text: str, store: Optional[str] = None) -> dict:
     """No-match queue (E5-S5): record raw text + store with a frequency
     counter so recurring gaps in OFF/BLS coverage are visible."""

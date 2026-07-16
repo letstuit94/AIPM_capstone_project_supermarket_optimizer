@@ -1,6 +1,6 @@
 import { Card } from "@/components/AppShell";
 import { cn } from "@/lib/utils";
-import { useLanguage } from "@/lib/i18n";
+import { useLanguage, nutrientLabel } from "@/lib/i18n";
 import type { NutritionAnalysis, AnalysisBar } from "@/types/api";
 
 // E7 results view: the ideal-vs-status-quo health score with its honest
@@ -21,12 +21,13 @@ function closenessTone(c: number | null): string {
 }
 
 function Bar({ bar }: { bar: AnalysisBar }) {
+  const { language } = useLanguage();
   const pct = bar.bar_pct;
   return (
     <li className="space-y-1">
       <div className="flex items-baseline justify-between text-xs">
         <span className="font-medium tracking-tight text-ink/80">
-          {bar.nutrient}
+          {nutrientLabel(bar.nutrient, language)}
           {bar.kind === "ceiling" ? <span className="ml-1 text-ink/40">(max)</span> : null}
           {bar.weight === 0 && bar.kind === "target" ? <span className="ml-1 text-ink/30">·</span> : null}
         </span>

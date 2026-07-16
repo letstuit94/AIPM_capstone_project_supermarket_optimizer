@@ -41,6 +41,7 @@ from backend.app.services.nutrition_personalization import (
     personalized_calorie_target_kcal,
     CALORIE_TARGET_DEFAULT_KCAL,
 )
+from backend.app.services import i18n
 
 ProfileLike = Union[Profile, ProfileCreate]
 
@@ -64,42 +65,19 @@ def has_sufficient_data(user_id: str) -> bool:
 _CALORIE_TOLERANCE = 0.10
 
 # One entry per tracked nutrient: (dimension, estimate_fn, requirement_fn,
-# default_requirement, message_template). Adding a nutrient here is the
-# only step needed once its intake_estimator/nutrient_requirements
+# default_requirement, message_key). The localized message template lives
+# in services/i18n.py under `message_key` (E13). Adding a nutrient here is
+# the only step needed once its intake_estimator/nutrient_requirements
 # functions exist — detect_absolute_gaps itself stays generic.
 _NUTRIENTS = [
-    (
-        "iron",
-        estimate_daily_iron_mg,
-        personalized_iron_ref_mg_per_day,
-        IRON_REF_DEFAULT_MG_PER_DAY,
-        "Based on what you've confirmed eating, you're getting ~{estimate:.1f} mg "
-        "iron/day vs. a ~{requirement:.0f} mg/day guideline. Iron-rich foods like "
-        "lentils, spinach or lean red meat would help close the gap.",
-    ),
-    (
-        "protein",
-        estimate_daily_protein_g,
-        personalized_protein_grams_per_day,
-        PROTEIN_REF_DEFAULT_G_PER_DAY,
-        "Based on what you've confirmed eating, you're getting ~{estimate:.0f} g "
-        "protein/day vs. a ~{requirement:.0f} g/day guideline. Greek yogurt, tofu, "
-        "lentils or eggs would help close the gap.",
-    ),
-    (
-        "calcium",
-        estimate_daily_calcium_mg,
-        personalized_calcium_ref_mg_per_day,
-        CALCIUM_REF_MG_PER_DAY,
-        "Based on what you've confirmed eating, you're getting ~{estimate:.0f} mg "
-        "calcium/day vs. a ~{requirement:.0f} mg/day guideline. Dairy, fortified "
-        "plant milk, tofu or leafy greens would help close the gap.",
-    ),
+    ("iron", estimate_daily_iron_mg, personalized_iron_ref_mg_per_day, IRON_REF_DEFAULT_MG_PER_DAY, "abs.iron"),
+    ("protein", estimate_daily_protein_g, personalized_protein_grams_per_day, PROTEIN_REF_DEFAULT_G_PER_DAY, "abs.protein"),
+    ("calcium", estimate_daily_calcium_mg, personalized_calcium_ref_mg_per_day, CALCIUM_REF_MG_PER_DAY, "abs.calcium"),
 ]
 
 
 def detect_calorie_gap(
-    user_id: str, profile: Optional[ProfileLike] = None
+    user_id: str, profile: Optional[ProfileLike] = None, lang: str = "en"
 ) -> Optional[AbsoluteGap]:
     """
     Goal-aware, two-sided calorie gap: unlike iron/protein/calcium, being
@@ -132,20 +110,12 @@ def detect_calorie_gap(
         if goal == Goal.LOSE_WEIGHT_GRADUALLY:
             return None
         status = GapStatus.LOW
-        message = (
-            f"You're eating ~{estimate.daily_estimate:.0f} kcal/day, noticeably "
-            f"below your ~{target:.0f} kcal/day target. If that's not intentional, "
-            "adding a snack or a bigger portion could help."
-        )
+        message = i18n.t(lang, "abs.calories_low", estimate=estimate.daily_estimate, target=target)
     else:
         if goal == Goal.BUILD_MUSCLE:
             return None
         status = GapStatus.HIGH
-        message = (
-            f"You're eating ~{estimate.daily_estimate:.0f} kcal/day, noticeably "
-            f"above your ~{target:.0f} kcal/day target. Cutting back on "
-            "energy-dense snacks or drinks could help."
-        )
+        message = i18n.t(lang, "abs.calories_high", estimate=estimate.daily_estimate, target=target)
 
     return AbsoluteGap(
         dimension="calories",
@@ -159,7 +129,7 @@ def detect_calorie_gap(
 
 
 def detect_absolute_gaps(
-    user_id: str, profile: Optional[ProfileLike] = None
+    user_id: str, profile: Optional[ProfileLike] = None, lang: str = "en"
 ) -> List[AbsoluteGap]:
     """
     Return the absolute gaps this session has enough confirmed pantry
@@ -170,7 +140,7 @@ def detect_absolute_gaps(
 
     candidates = []  # (severity, AbsoluteGap)
 
-    for dimension, estimate_fn, requirement_fn, default_requirement, message_template in _NUTRIENTS:
+    for dimension, estimate_fn, requirement_fn, default_requirement, message_key in _NUTRIENTS:
         estimate = estimate_fn(user_id)
         if estimate.daily_estimate is None:
             continue
@@ -187,11 +157,11 @@ def detect_absolute_gaps(
             daily_estimate=estimate.daily_estimate,
             daily_requirement=requirement,
             ratio=ratio,
-            message=message_template.format(estimate=estimate.daily_estimate, requirement=requirement),
+            message=i18n.t(lang, message_key, estimate=estimate.daily_estimate, requirement=requirement),
             confidence=estimate.confidence,
         )))
 
-    calorie_gap = detect_calorie_gap(user_id, profile)
+    calorie_gap = detect_calorie_gap(user_id, profile, lang)
     if calorie_gap is not None:
         candidates.append((abs(1 - calorie_gap.ratio), calorie_gap))
 

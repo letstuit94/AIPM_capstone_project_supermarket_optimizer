@@ -28,6 +28,15 @@ export interface UploadReceiptResponse {
   parsed: ParsedReceipt;
 }
 
+// Onboarding's baseline-upload gate (E1): cumulative food items uploaded
+// across every receipt so far, vs. the target that unlocks the rest of
+// the app (see backend GET /receipts/progress).
+export interface ReceiptUploadProgress {
+  count: number;
+  target: number;
+  complete: boolean;
+}
+
 export interface ReceiptItemRow {
   id: string;
   receipt_id: string;
@@ -133,13 +142,7 @@ export interface ItemMatchPick {
 
 // --- Epic 3: Profile -------------------------------------------------
 
-export type Goal =
-  | "build_muscle"
-  | "more_energy"
-  | "lose_weight_gradually"
-  | "eat_balanced"
-  | "better_focus"
-  | "better_sleep";
+export type Goal = "lose_weight_gradually" | "maintain" | "build_muscle";
 
 // Self-reported bucket (chat Q5, optional) — no birthday collected.
 export type AgeRange = "under_25" | "25-35" | "36-45" | "46-55" | "55+";
@@ -531,4 +534,50 @@ export interface Feedback extends FeedbackCreate {
 
 export interface ApiErrorBody {
   detail?: string;
+}
+
+// --- Epic 10: Eaten / consumption feedback (A/B) -------------------------
+
+export type ConsumptionVariant = "A" | "B";
+
+export interface PriorReceiptItem {
+  item_id: string;
+  name: string;
+  quantity: number | null;
+  unit: string | null;
+  category: string | null;
+  waste_fraction: number;
+}
+
+export interface PriorReceipt {
+  receipt_id: string;
+  store: string | null;
+  purchase_date: string | null;
+  uploaded_at: string | null;
+  items: PriorReceiptItem[];
+}
+
+export interface ConsumptionContext {
+  user_id: string;
+  // Sticky A/B assignment (R-EATEN): A = prompted at next upload,
+  // B = a card on the dashboard.
+  variant: ConsumptionVariant;
+  // null when the user has no prior receipt (variant A shows nothing).
+  prior_receipt: PriorReceipt | null;
+}
+
+export interface ConsumptionFeedbackPayload {
+  receipt_id: string;
+  // Per-item waste (BR-I3 "named items reduced individually")...
+  items?: { item_id: string; waste_fraction: number }[];
+  // ...or one uniform fraction across the receipt ("else uniform").
+  waste_fraction?: number;
+}
+
+export interface ConsumptionFeedbackResult {
+  user_id: string;
+  receipt_id: string;
+  items_updated: number;
+  // Freshly recomputed status-quo daily intake (per nutrient).
+  daily_intake: Record<string, number>;
 }

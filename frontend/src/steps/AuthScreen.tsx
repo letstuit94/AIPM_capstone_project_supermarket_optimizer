@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, SectionLabel, PrimaryButton, inputCls } from "@/components/AppShell";
+import { useLanguage } from "@/lib/i18n";
 
 // E1: sign-up / login gate (FR-1). Email+password and Google, with a
 // ≥16 age gate (BR-P7) enforced at sign-up via date of birth. On success
@@ -20,6 +21,7 @@ function ageFromDob(dob: string): number {
 }
 
 export function AuthScreen() {
+  const { t } = useLanguage();
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -35,11 +37,11 @@ export function AuthScreen() {
 
     if (mode === "signup") {
       if (!dob) {
-        setError("Please enter your date of birth.");
+        setError(t("auth.errNoDob"));
         return;
       }
       if (ageFromDob(dob) < MIN_AGE) {
-        setError(`You must be at least ${MIN_AGE} to use Nährbert.`);
+        setError(t("auth.errUnderage").replace("{age}", String(MIN_AGE)));
         return;
       }
     }
@@ -59,7 +61,7 @@ export function AuthScreen() {
         // If email confirmation is on, there's no session yet.
         const { data } = await supabase.auth.getSession();
         if (!data.session) {
-          setNotice("Account created — check your email to confirm, then log in.");
+          setNotice(t("auth.noticeConfirm"));
           setMode("login");
         }
       } else {
@@ -67,11 +69,13 @@ export function AuthScreen() {
         if (error) throw error;
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Something went wrong.";
+      // Supabase's own error text is English-only (provider-supplied); our
+      // own copy is localized. Fall back to the generic localized message.
+      const message = err instanceof Error ? err.message : t("auth.errGeneric");
       // Already-registered email → route to login (E1-S1).
       if (mode === "signup" && /already registered|already exists|already in use/i.test(message)) {
         setMode("login");
-        setNotice("This email already has an account — please log in.");
+        setNotice(t("auth.noticeExists"));
       } else {
         setError(message);
       }
@@ -94,7 +98,7 @@ export function AuthScreen() {
       <div className="space-y-2 text-center">
         <h1 className="text-3xl font-medium tracking-tight">Nährbert</h1>
         <p className="text-sm text-ink/60">
-          {mode === "login" ? "Welcome back." : "Create your account."}
+          {mode === "login" ? t("auth.welcomeBack") : t("auth.createSubtitle")}
         </p>
       </div>
 
@@ -106,18 +110,18 @@ export function AuthScreen() {
               type="button"
               onClick={() => { setMode(m); setError(null); setNotice(null); }}
               className={
-                "flex-1 rounded-xl py-2 text-sm font-medium capitalize ring-1 transition-colors " +
+                "flex-1 rounded-xl py-2 text-sm font-medium ring-1 transition-colors " +
                 (mode === m ? "bg-ink text-canvas ring-ink" : "bg-zinc-50 text-ink/60 ring-black/5")
               }
             >
-              {m === "login" ? "Log in" : "Sign up"}
+              {m === "login" ? t("auth.login") : t("auth.signup")}
             </button>
           ))}
         </div>
 
         <form onSubmit={submit} className="space-y-3">
           <div className="space-y-1">
-            <SectionLabel>Email</SectionLabel>
+            <SectionLabel>{t("auth.email")}</SectionLabel>
             <input
               className={inputCls}
               type="email"
@@ -128,7 +132,7 @@ export function AuthScreen() {
             />
           </div>
           <div className="space-y-1">
-            <SectionLabel>Password</SectionLabel>
+            <SectionLabel>{t("auth.password")}</SectionLabel>
             <input
               className={inputCls}
               type="password"
@@ -141,7 +145,7 @@ export function AuthScreen() {
           </div>
           {mode === "signup" ? (
             <div className="space-y-1">
-              <SectionLabel>Date of birth</SectionLabel>
+              <SectionLabel>{t("auth.dob")}</SectionLabel>
               <input
                 className={inputCls}
                 type="date"
@@ -149,7 +153,7 @@ export function AuthScreen() {
                 value={dob}
                 onChange={(e) => setDob(e.target.value)}
               />
-              <p className="text-[11px] text-ink/40">You must be at least {MIN_AGE}.</p>
+              <p className="text-[11px] text-ink/40">{t("auth.ageHint").replace("{age}", String(MIN_AGE))}</p>
             </div>
           ) : null}
 
@@ -157,13 +161,13 @@ export function AuthScreen() {
           {notice ? <p className="text-xs text-emerald-700">{notice}</p> : null}
 
           <PrimaryButton type="submit" disabled={busy}>
-            {busy ? "Please wait…" : mode === "login" ? "Log in" : "Create account"}
+            {busy ? t("auth.pleaseWait") : mode === "login" ? t("auth.login") : t("auth.createAccount")}
           </PrimaryButton>
         </form>
 
         <div className="flex items-center gap-3">
           <span className="h-px flex-1 bg-black/10" />
-          <span className="text-[11px] uppercase tracking-widest text-ink/40">or</span>
+          <span className="text-[11px] uppercase tracking-widest text-ink/40">{t("auth.or")}</span>
           <span className="h-px flex-1 bg-black/10" />
         </div>
 
@@ -172,12 +176,12 @@ export function AuthScreen() {
           onClick={google}
           className="w-full rounded-xl bg-zinc-50 py-2.5 text-sm font-medium tracking-tight text-ink ring-1 ring-black/10 hover:bg-zinc-100"
         >
-          Continue with Google
+          {t("auth.google")}
         </button>
       </Card>
 
       <p className="text-center text-[11px] text-ink/40">
-        Nährbert provides general nutrition information, not medical advice.
+        {t("auth.disclaimer")}
       </p>
     </section>
   );

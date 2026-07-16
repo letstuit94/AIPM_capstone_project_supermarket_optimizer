@@ -113,6 +113,13 @@ def update_receipt_with_parse(receipt_id, parsed_data: dict):
     return _update_tolerant("receipts", receipt_id, fields)
 
 
+def clear_receipt_storage_path(receipt_id):
+    """E12-S5 / BR-P4: null the storage_path once the raw image has been
+    deleted post-processing. Tolerant so it degrades on an unmigrated DB."""
+
+    return _update_tolerant("receipts", receipt_id, {"storage_path": None})
+
+
 def get_receipt(receipt_id):
     result = (
         supabase.table("receipts")
@@ -187,6 +194,21 @@ def update_receipt_item(item_id, fields: dict):
         .eq("id", item_id)
         .execute()
     )
+
+
+def set_receipt_item_waste(item_id: str, waste_fraction: float):
+    """
+    Persist a receipt item's eaten-feedback waste share (E10 / BR-I3).
+
+    Uses the tolerant update so that, in an environment where the v12
+    migration hasn't been run yet, the write degrades to a logged no-op
+    (`receipt_items.waste_fraction` column missing) instead of 500ing the
+    feedback flow — matching every other migration-window safety net here.
+    Until that environment migrates, status-quo simply keeps treating waste
+    as 0, which is exactly its pre-E10 behaviour.
+    """
+
+    return _update_tolerant("receipt_items", item_id, {"waste_fraction": waste_fraction})
 
 
 def delete_receipt_items(receipt_id):
@@ -265,6 +287,63 @@ def delete_profile(profile_id: str):
         .eq("id", profile_id)
         .execute()
     )
+
+
+# ── E12-S3 account-erasure helpers (delete all of a user's rows) ─────────
+# Each is tolerant: a table/column that doesn't exist in this environment
+# (migration pending) is skipped, not fatal — erasure must complete across
+# whatever tables DO exist rather than aborting on the first gap.
+
+def _delete_by(table: str, column: str, value: str):
+    try:
+        return supabase.table(table).delete().eq(column, value).execute()
+    except APIError as e:
+        if e.code not in (_MISSING_TABLE_CODE, _MISSING_COLUMN_CODE, UNDEFINED_COLUMN_CODE):
+            raise
+        print(f"[db] {table}.{column} missing (migration pending?) — skipping erase")
+        return None
+
+
+def delete_recommendations_by_user(user_id: str):
+    return _delete_by("recommendations", "user_id", user_id)
+
+
+def delete_feedback_by_user(user_id: str):
+    return _delete_by("feedback", "user_id", user_id)
+
+
+def delete_pantry_by_user(user_id: str):
+    _delete_by("pantry_consumption_events", "user_id", user_id)
+    return _delete_by("pantry_items", "user_id", user_id)
+
+
+def delete_events_by_user(user_id: str):
+    return _delete_by("events", "user_id", user_id)
+
+
+def delete_profiles_by_user(user_id: str):
+    return _delete_by("profiles", "user_id", user_id)
+
+
+def delete_verified_votes_by_user(user_id: str):
+    """E12-S3: remove only THIS user's vote rows. The de-identified
+    aggregate (winner per key, computed from the remaining votes) is
+    retained — other users' votes are never touched (BR-P3)."""
+
+    return _delete_by("verified_matches", "user_id", user_id)
+
+
+def delete_auth_user(user_id: str) -> bool:
+    """Delete the Supabase Auth user itself (the login/email is personal
+    data too — full GDPR erasure). Requires the service-role key, which is
+    what this client is built with. Returns True on success."""
+
+    try:
+        supabase.auth.admin.delete_user(user_id)
+        return True
+    except Exception as e:  # noqa: BLE001 — report, don't crash the erasure
+        print(f"[db] auth user delete failed for {user_id}: {e}")
+        return False
 
 
 def create_recommendation_row(recommendation_id: str, user_id: str, payload: dict):
@@ -451,4 +530,48 @@ def log_no_match_row(entry: dict):
         if e.code != _MISSING_TABLE_CODE:
             raise
         print("[db] 'no_match_queue' table missing (migration pending?) — not logged")
+        return None
+
+
+# ── Learned non-food terms (E3-S4 follow-up) ─────────────────────────────
+# Same tolerant-degrade pattern as verified_matches/no_match_queue above:
+# an unmigrated DB just means nothing's been learned yet, not a 500.
+
+def get_all_non_food_keys() -> list:
+    """Every learned non-food key, for the upload-time filter pass."""
+
+    try:
+        result = supabase.table("non_food_terms").select("key").execute()
+    except APIError as e:
+        if e.code != _MISSING_TABLE_CODE:
+            raise
+        return []
+    return [row["key"] for row in result.data]
+
+
+def upsert_non_food_term(key: str, raw_text: str):
+    """Record (or bump the report count for) a learned non-food key."""
+
+    from datetime import datetime, timezone
+
+    try:
+        existing = supabase.table("non_food_terms").select("*").eq("key", key).execute().data
+        if existing:
+            row = existing[0]
+            return (
+                supabase.table("non_food_terms")
+                .update({
+                    "raw_text": raw_text,
+                    "times_reported": (row.get("times_reported") or 1) + 1,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                })
+                .eq("id", row["id"]).execute()
+            )
+        return supabase.table("non_food_terms").insert({
+            "key": key, "raw_text": raw_text, "times_reported": 1,
+        }).execute()
+    except APIError as e:
+        if e.code != _MISSING_TABLE_CODE:
+            raise
+        print("[db] 'non_food_terms' table missing (migration pending?) — not learned")
         return None

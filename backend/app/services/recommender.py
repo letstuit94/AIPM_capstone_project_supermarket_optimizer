@@ -39,6 +39,7 @@ from backend.app.services.exclusion_filter import ExclusionCandidate, check_cand
 from backend.app.services.explainer import generate_explanation
 from backend.app.services.recipe_suggester import suggest_recipes
 from backend.app.services.shelf_life import EXPIRING_SOON_WITHIN_DAYS
+from backend.app.services import i18n
 from backend.app.services.preference_learning import item_preference_scores
 
 _RECOMMENDATIONS_PATH = Path(__file__).resolve().parents[1] / "data" / "recommendations.json"
@@ -75,7 +76,7 @@ def default_profile() -> ProfileCreate:
     """
 
     return ProfileCreate(
-        goal=Goal.EAT_BALANCED,
+        goal=Goal.MAINTAIN,
         activity_level=ActivityLevel.MODERATELY_ACTIVE,
         dietary_pattern=DietaryPattern.NO_SPECIFIC_DIET,
     )
@@ -176,6 +177,7 @@ def find_pantry_match(
     pantry_items: List[dict],
     profile: Optional[ProfileLike],
     user_id: Optional[str] = None,
+    lang: str = "en",
 ) -> Optional[PantryMatch]:
     """
     "Use what you already have" — walk gaps worst-first (same order
@@ -203,7 +205,15 @@ def find_pantry_match(
     for gap in gaps:
         matches = []
         for candidate in _apply_preference_scores(_candidates_for(gap), scores):
-            pantry_item = pantry_items and next(
+            # Bug fix: `pantry_items and next(...)` looks like a null-guard
+            # but isn't one — when pantry_items is an empty list (falsy),
+            # `and` short-circuits and returns `[]` itself, not None. That
+            # `[]` then failed the `is None` check below and got appended
+            # to `matches`, crashing `min()`'s key lookup with
+            # "'list' object has no attribute 'get'" for any user with an
+            # empty pantry. `next(genexpr, None)` already returns None on
+            # an empty pantry_items on its own — no guard needed.
+            pantry_item = next(
                 (i for i in pantry_items if i["normalized_name"] == candidate["item"]), None
             )
             if pantry_item is None:
@@ -227,18 +237,13 @@ def find_pantry_match(
         days = best.get("days_until_expiry")
         urgent = days is not None and days <= EXPIRING_SOON_WITHIN_DAYS
 
+        nutrient_name = i18n.nutrient(lang, gap.dimension)
         if urgent and days is not None and days < 0:
-            message = (
-                f"Your {best['normalized_name']} is past its estimated shelf life — "
-                f"use it now or toss it. It also helps your {gap.dimension} gap."
-            )
+            message = i18n.t(lang, "rec.pantry_expired", item=best["normalized_name"], nutrient=nutrient_name)
         elif urgent:
-            message = (
-                f"Your {best['normalized_name']} is expiring soon — use it up, "
-                f"and it helps your {gap.dimension} gap too."
-            )
+            message = i18n.t(lang, "rec.pantry_expiring", item=best["normalized_name"], nutrient=nutrient_name)
         else:
-            message = f"You already have {best['normalized_name']} in your pantry — it helps your {gap.dimension} gap."
+            message = i18n.t(lang, "rec.pantry_have", item=best["normalized_name"], nutrient=nutrient_name)
 
         return PantryMatch(
             item=best["normalized_name"],
@@ -256,6 +261,7 @@ def recommend_next_cart(
     profile: Optional[ProfileLike],
     confidence: ConfidenceLevel,
     user_id: Optional[str] = None,
+    lang: str = "en",
 ) -> NextCartRecommendation:
     """
     Build the single Next Cart recommendation for this basket + profile.
@@ -278,8 +284,7 @@ def recommend_next_cart(
         return NextCartRecommendation(
             status=RecommendationStatus.NO_GAPS,
             action_type=ActionType.NONE,
-            message="Your basket looks balanced across the tracked dimensions "
-                    "— no specific action needed right now.",
+            message=i18n.t(lang, "rec.no_gaps"),
             confidence=confidence,
         )
 
@@ -301,29 +306,30 @@ def recommend_next_cart(
             ))
 
             if check.allowed:
-                reasoning = [gap.message, candidate["rationale"]]
+                reasoning = [gap.message, i18n.rationale_for(candidate, lang)]
                 if scores.get(candidate["item"], 0) > 0:
-                    reasoning.append("You've responded positively to this before.")
+                    reasoning.append(i18n.t(lang, "rec.positive_history"))
                 return NextCartRecommendation(
                     status=RecommendationStatus.RECOMMENDED,
                     action_type=ActionType(candidate["action_type"]),
                     item=candidate["item"],
                     targets_gap=gap.dimension,
                     gap_status=gap.status.value,
-                    message=f"{candidate['action_type'].capitalize()}: {candidate['item']}",
+                    message=i18n.t(lang, "rec.action_item",
+                                   verb=i18n.action_verb(lang, candidate["action_type"]),
+                                   item=candidate["item"]),
                     reasoning=reasoning,
-                    explanation=generate_explanation(gap, candidate, profile),
+                    explanation=generate_explanation(gap, candidate, profile, lang),
                     confidence=confidence,
                     evaluated_candidates=evaluated,
-                    recipes=suggest_recipes(candidate["item"]),
+                    recipes=suggest_recipes(candidate["item"], lang),
                 )
 
     # Every candidate for every gap conflicted with the profile.
     return NextCartRecommendation(
         status=RecommendationStatus.NO_SUITABLE_CANDIDATE,
         action_type=ActionType.NONE,
-        message="We couldn't find a recommendation that fits your dietary "
-                "profile right now.",
+        message=i18n.t(lang, "rec.no_suitable"),
         reasoning=[gap.message for gap in gaps],
         confidence=confidence,
         evaluated_candidates=evaluated,

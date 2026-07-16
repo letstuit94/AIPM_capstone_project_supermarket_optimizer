@@ -15,6 +15,7 @@ from backend.app.models.profile import Profile, ProfileCreate
 from backend.app.models.snapshot import Gap
 from backend.app.services.exclusion_filter import ExclusionCandidate, check_candidate
 from backend.app.services.recommender import RECOMMENDATIONS, default_profile
+from backend.app.services import i18n
 
 ProfileLike = Union[Profile, ProfileCreate]
 
@@ -32,6 +33,7 @@ def suggest_easy_swaps(
     profile: Optional[ProfileLike],
     month: int,
     limit: int = MAX_EASY_SWAPS,
+    lang: str = "en",
 ) -> List[EasySwap]:
     """
     Up to `limit` low-effort candidates across every flagged gap (not
@@ -59,6 +61,7 @@ def suggest_easy_swaps(
             check = check_candidate(
                 profile,
                 ExclusionCandidate(name=candidate["item"], tags=candidate["tags"]),
+                lang,
             )
             if not check.allowed:
                 continue
@@ -68,7 +71,7 @@ def suggest_easy_swaps(
                 item=candidate["item"],
                 targets_gap=gap.dimension,
                 cost=candidate.get("cost", "medium"),
-                rationale=candidate["rationale"],
+                rationale=i18n.rationale_for(candidate, lang),
             ))
             if len(swaps) >= limit:
                 return swaps

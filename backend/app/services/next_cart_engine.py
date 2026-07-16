@@ -31,6 +31,7 @@ from backend.app.models.next_cart import (
 )
 from backend.app.services.exclusion_filter import check_candidate, ExclusionCandidate
 from backend.app.services.symptom_relevance import symptom_relevance
+from backend.app.services import i18n
 
 _RECS_PATH = Path(__file__).resolve().parents[1] / "data" / "recommendations.json"
 with open(_RECS_PATH, encoding="utf-8") as _fh:
@@ -41,11 +42,8 @@ with open(_RECS_PATH, encoding="utf-8") as _fh:
 _GOAL_RELEVANCE = {
     Goal.BUILD_MUSCLE: {"protein": 1.5, "carbs": 1.2},
     Goal.LOSE_WEIGHT_GRADUALLY: {"protein": 1.4, "fiber": 1.3},
-    # maintenance-ish goals: a gentle protein lean (BR-S5 "maintain ×1.1")
-    Goal.EAT_BALANCED: {"protein": 1.1},
-    Goal.MORE_ENERGY: {"protein": 1.1},
-    Goal.BETTER_FOCUS: {"protein": 1.1},
-    Goal.BETTER_SLEEP: {"protein": 1.1},
+    # a gentle protein lean (BR-S5 "maintain ×1.1")
+    Goal.MAINTAIN: {"protein": 1.1},
 }
 
 # E7 bar nutrient → (candidate key, gap direction). Only nutrients that have
@@ -98,7 +96,7 @@ def derive_gaps(analysis: dict) -> List[dict]:
     return gaps
 
 
-def build_next_cart(analysis: dict, profile) -> StructuredNextCart:
+def build_next_cart(analysis: dict, profile, lang: str = "en") -> StructuredNextCart:
     """E8 structured recommendation from the E7 analysis + profile."""
 
     confidence_value = (analysis.get("confidence") or {}).get("value", 0.0)
@@ -119,7 +117,7 @@ def build_next_cart(analysis: dict, profile) -> StructuredNextCart:
             name = cand["item"]
             # BR-S6: exclusion filter BEFORE scoring
             if profile is not None:
-                res = check_candidate(profile, ExclusionCandidate(name=name, tags=cand.get("tags", [])))
+                res = check_candidate(profile, ExclusionCandidate(name=name, tags=cand.get("tags", [])), lang)
                 if not res.allowed:
                     evaluated.append(EvaluatedCandidate(item=name, targets_gap=gap["key"],
                                                         allowed=False, reason=res.reason))
@@ -134,7 +132,7 @@ def build_next_cart(analysis: dict, profile) -> StructuredNextCart:
                 action_type=ActionType(cand.get("action_type", "add")),
                 targets_gap=gap["key"],
                 score=score, severity=gap["severity"], goal_relevance=gr,
-                rationale=cand.get("rationale"),
+                rationale=i18n.rationale_for(cand, lang),
             ))
             evaluated.append(EvaluatedCandidate(item=name, targets_gap=gap["key"], allowed=True))
 
@@ -148,8 +146,7 @@ def build_next_cart(analysis: dict, profile) -> StructuredNextCart:
     if not scored:
         status = (RecommendationStatus.NO_SUITABLE_CANDIDATE if gaps
                   else RecommendationStatus.NO_GAPS)
-        msg = ("No suitable recommendation — every candidate conflicts with your profile."
-               if gaps else "Your basket looks balanced — no notable gaps to fill.")
+        msg = i18n.t(lang, "cart.no_suitable") if gaps else i18n.t(lang, "cart.no_gaps")
         return StructuredNextCart(status=status, primary=None, alternatives=[], reduce=reduce,
                                   message=msg, confidence=conf_level, evaluated_candidates=evaluated)
 
@@ -158,7 +155,7 @@ def build_next_cart(analysis: dict, profile) -> StructuredNextCart:
         primary=scored[0],
         alternatives=scored[1:3],   # ≤2
         reduce=reduce,
-        message=f"Top pick to close your biggest gap: {scored[0].item}.",
+        message=i18n.t(lang, "cart.primary", item=scored[0].item),
         confidence=conf_level,
         evaluated_candidates=evaluated,
     )

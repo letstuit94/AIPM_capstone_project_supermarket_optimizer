@@ -25,7 +25,7 @@ is OFF's own (cached) HTTP layer and the in-memory BLS table.
 from typing import Optional, List, Dict
 
 from backend.app.models.nutrition import MatchedProduct, MatchType, NutritionValues
-from backend.app.services import matcher, base_terms, bls_matcher, verified_matches
+from backend.app.services import matcher, base_terms, bls_matcher, verified_matches, non_food_terms
 from backend.app.services.fallback_categories import (
     _canonical_category,
     CATEGORY_NUTRITION,
@@ -277,6 +277,20 @@ def resolve_item(item: dict) -> MatchedProduct:
 
     name = _item_name(item)
     category = item.get("category")
+
+    # E3-S4 follow-up: an item the user (or the learned keyword list)
+    # marked non-food is deliberately never matched — no OFF/BLS lookup,
+    # no category-fallback nutrition. nutrition=None is the same "nothing
+    # to add" signal every downstream consumer (status_quo, gap_engine,
+    # health_score, next_cart) already skips for missing-data items, so
+    # this is a single choke point rather than a filter every caller has
+    # to remember to apply.
+    if non_food_terms.is_non_food_category(category):
+        return MatchedProduct(
+            parsed_item_name=name, match_type=MatchType.NONE, confidence=0.0,
+            identity_conf=0.0, nutrition_conf=0.0, data_source="non_food", nutrition=None,
+        )
+
     if not name:
         return MatchedProduct(
             parsed_item_name="", match_type=MatchType.NONE, confidence=0.0,

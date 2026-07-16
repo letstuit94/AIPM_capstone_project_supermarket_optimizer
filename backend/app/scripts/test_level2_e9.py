@@ -62,8 +62,8 @@ def test_alcohol_discount():
     mp = [MatchedProduct(parsed_item_name="a", match_type=MatchType.EXACT, confidence=1.0,
                          identity_conf=1.0, nutrition_conf=1.0, data_source="off",
                          nutrition=NutritionValues(calories_kcal=100))]
-    sober = ProfileCreate(goal=Goal.EAT_BALANCED, activity_level="moderately_active", dietary_pattern="omnivore")
-    drinker = ProfileCreate(goal=Goal.EAT_BALANCED, activity_level="moderately_active", dietary_pattern="omnivore",
+    sober = ProfileCreate(goal=Goal.MAINTAIN, activity_level="moderately_active", dietary_pattern="omnivore")
+    drinker = ProfileCreate(goal=Goal.MAINTAIN, activity_level="moderately_active", dietary_pattern="omnivore",
                             consent_level2=True, l2_alcohol="weekly_plus")
     c_sober = snapshot_confidence(items, mp, sober)["value"]
     c_drinker = snapshot_confidence(items, mp, drinker)["value"]
@@ -76,8 +76,8 @@ def test_symptom_feeds_e8():
     analysis = {"confidence": {"value": 0.6, "band": "medium"},
                 "bars": [{"nutrient": "protein", "kind": "target", "intake": 50, "reference": 100}],
                 "grouping": {}}
-    base = ProfileCreate(goal=Goal.EAT_BALANCED, activity_level="moderately_active", dietary_pattern="omnivore")
-    l2 = ProfileCreate(goal=Goal.EAT_BALANCED, activity_level="moderately_active", dietary_pattern="omnivore",
+    base = ProfileCreate(goal=Goal.MAINTAIN, activity_level="moderately_active", dietary_pattern="omnivore")
+    l2 = ProfileCreate(goal=Goal.MAINTAIN, activity_level="moderately_active", dietary_pattern="omnivore",
                        consent_level2=True, l2_hunger="most_of_day")
     s_base = build_next_cart(analysis, base).primary.score
     s_l2 = build_next_cart(analysis, l2).primary.score

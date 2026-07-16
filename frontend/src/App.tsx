@@ -17,8 +17,8 @@ import { DiaryStep } from "@/steps/DiaryStep";
 import { ChatOnboardingStep } from "@/steps/ChatOnboardingStep";
 import { ProfileSummary } from "@/steps/ProfileSummary";
 import { ResultsStep } from "@/steps/ResultsStep";
-import { getMyProfile, deleteReceipt, deleteProfile, ApiError } from "@/lib/api";
-import type { Profile } from "@/types/api";
+import { getMyProfile, getReceiptUploadProgress, deleteAccount, ApiError } from "@/lib/api";
+import type { Profile, ReceiptUploadProgress } from "@/types/api";
 import { LanguageProvider, useLanguage, t, getStoredLanguage } from "@/lib/i18n";
 
 const RECEIPT_KEY = "nutriwise.receiptId";
@@ -42,6 +42,13 @@ function App() {
   // a fresh walk-through.
   const [resumeProfile, setResumeProfile] = useState<Profile | null>(null);
   const [profileName, setProfileName] = useState<string | null>(null);
+
+  // E1's baseline-upload gate: active from the moment onboarding's profile
+  // step finishes until 50 food items have been uploaded. While active,
+  // finishing a receipt's Review loops back to another upload instead of
+  // continuing into the app (see handleOnboardingReviewContinue below).
+  const [uploadGateActive, setUploadGateActive] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<ReceiptUploadProgress | null>(null);
 
   const [consented, setConsented] = useState<boolean>(
     () => localStorage.getItem(CONSENT_KEY) === "true",
@@ -69,6 +76,8 @@ function App() {
         setReceiptId(null);
         localStorage.removeItem(RECEIPT_KEY);
         setNotifications([]);
+        setUploadGateActive(false);
+        setUploadProgress(null);
       }
     });
     return () => sub.subscription.unsubscribe();
@@ -139,39 +148,67 @@ function App() {
     setProfileId(id);
     setProfileName(name);
     setResumeProfile(null);
+    setUploadGateActive(true);
+    setUploadProgress(null);
+    void refreshUploadProgress();
     setStep("onboardingUpload");
   }
 
-  async function handleDeleteData() {
-    if (!receiptId && !profileId) return;
+  // E1's baseline-upload gate: how many food items uploaded so far, vs.
+  // the target that unlocks the rest of the app. Best-effort — a failed
+  // fetch just leaves the progress bar blank rather than blocking upload.
+  async function refreshUploadProgress(): Promise<ReceiptUploadProgress | null> {
+    try {
+      const p = await getReceiptUploadProgress();
+      setUploadProgress(p);
+      return p;
+    } catch {
+      return null;
+    }
+  }
+
+  // Finishing a receipt's Review while the baseline-upload gate is active:
+  // loop back to another upload until the target is reached, then hand off
+  // to the rest of the app exactly like a normal Review would.
+  async function handleOnboardingReviewContinue() {
+    const p = await refreshUploadProgress();
+    if (p?.complete) {
+      setUploadGateActive(false);
+      setStep("pantry");
+    } else {
+      setStep("onboardingUpload");
+    }
+  }
+
+  function handleOnboardingSkip() {
+    setUploadGateActive(false);
+    setStep("pantry");
+  }
+
+  // E12-S3 / FR-12.3: full GDPR erasure. One confirmed path (used by both
+  // the footer and the profile screen): hard cascade-delete all personal
+  // data + the Supabase Auth user server-side, then sign out. Replaces the
+  // old partial "delete the tracked receipt + profile" reset, which left
+  // other receipts, pantry, votes and the auth login behind.
+  async function handleDeleteAccount() {
     const lang = getStoredLanguage();
     if (!window.confirm(t("footer.deleteConfirm", lang))) {
       return;
     }
-
     try {
-      await Promise.all([
-        receiptId
-          ? deleteReceipt(receiptId).catch((e) => {
-              if (!(e instanceof ApiError && e.status === 404)) throw e;
-            })
-          : null,
-        profileId
-          ? deleteProfile(profileId).catch((e) => {
-              if (!(e instanceof ApiError && e.status === 404)) throw e;
-            })
-          : null,
-      ]);
+      await deleteAccount();
     } catch (e) {
-      window.alert(e instanceof ApiError ? e.message : t("footer.deleteFailed", lang));
-      return;
+      // 401 is expected/benign — the auth user was deleted mid-request, so
+      // the token is already invalid. Treat it as success and sign out.
+      if (!(e instanceof ApiError && e.status === 401)) {
+        window.alert(e instanceof ApiError ? e.message : t("footer.deleteFailed", lang));
+        return;
+      }
     }
-
     localStorage.removeItem(RECEIPT_KEY);
-    setReceiptId(null);
-    setProfileId(null);
-    setResumeProfile(null);
-    setStep("onboarding");
+    // Sign out → onAuthStateChange(null) resets all local state and shows
+    // AuthScreen. The account and its data no longer exist.
+    await supabase.auth.signOut();
   }
 
   // Logout (E1-S4): end the Supabase session. onAuthStateChange then fires
@@ -213,8 +250,8 @@ function App() {
       <AppShell
         step={step}
         onNavigate={setStep}
-        onDeleteData={handleDeleteData}
-        canDeleteData={Boolean(receiptId || profileId)}
+        onDeleteData={handleDeleteAccount}
+        canDeleteData={Boolean(session)}
         hasUnreadNotifications={notifications.some((n) => n.unread)}
       >
         {!consented ? (
@@ -242,14 +279,19 @@ function App() {
             {step === "onboardingUpload" ? (
               <OnboardingUploadStep
                 profileName={profileName}
+                itemProgress={uploadProgress}
                 onUploaded={handleUploaded}
-                onSkip={() => setStep("pantry")}
+                onSkip={handleOnboardingSkip}
               />
             ) : null}
 
             {step === "userProfile" ? (
               profileId ? (
-                <ProfileSummary profileId={profileId} onLogout={handleLogout} />
+                <ProfileSummary
+                  profileId={profileId}
+                  onLogout={handleLogout}
+                  onDeleteAccount={handleDeleteAccount}
+                />
               ) : (
                 <EmptyStateProfile onAction={() => setStep("onboarding")} />
               )
@@ -257,7 +299,10 @@ function App() {
 
             {step === "review" ? (
               receiptId ? (
-                <ReviewStep receiptId={receiptId} onContinue={() => setStep("pantry")} />
+                <ReviewStep
+                  receiptId={receiptId}
+                  onContinue={uploadGateActive ? handleOnboardingReviewContinue : () => setStep("pantry")}
+                />
               ) : (
                 <EmptyState onAction={() => setStep("pantry")} />
               )

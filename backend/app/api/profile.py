@@ -166,8 +166,10 @@ def submit_level2(
 @router.delete("/profile/{profile_id}")
 def erase_profile(profile_id: str, user_id: str = Depends(get_current_user)):
     """
-    Permanently delete a profile (GDPR user-initiated erasure, Story 7.3).
-    Restricted to the profile's owner.
+    Delete a single profile row (narrow operation, ownership-checked).
+
+    For full GDPR erasure of the whole account, use `DELETE /account`
+    (E12-S3) — this endpoint only removes the profile record itself.
     """
 
     row = get_profile(profile_id)
@@ -177,3 +179,32 @@ def erase_profile(profile_id: str, user_id: str = Depends(get_current_user)):
 
     delete_profile(profile_id)
     return {"profile_id": profile_id, "deleted": True}
+
+
+@router.get("/profile/me/export")
+def export_my_data(user_id: str = Depends(get_current_user)):
+    """
+    E12-S2 / FR-12.4 / BR-P3: export the user's full record (profile, every
+    receipt + its line items, and the derived ideal profile) as one JSON
+    bundle. Read-only. The client offers it as a download.
+    """
+
+    from backend.app.services.account import export_user
+
+    return export_user(user_id)
+
+
+@router.delete("/account")
+def delete_account(user_id: str = Depends(get_current_user)):
+    """
+    E12-S3 / FR-12.3 / BR-P3: hard cascade-delete ALL of the authenticated
+    user's personal data — receipts + items + stored images, pantry,
+    recommendations, feedback, analytics events, profile(s), and the user's
+    verified-match votes — then delete the Supabase Auth user itself. The
+    de-identified verified-match aggregate is retained (no personal data).
+    The client signs out after this returns.
+    """
+
+    from backend.app.services.account import erase_user
+
+    return erase_user(user_id)

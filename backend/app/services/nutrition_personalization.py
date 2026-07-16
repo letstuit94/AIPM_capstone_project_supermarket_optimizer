@@ -74,9 +74,8 @@ _DEFAULT_PROTEIN_G_PER_KG = 0.8
 # Miro-diagram's "Goal Multiplier". Broad, commonly-cited ranges (a
 # deficit for gradual weight loss, a surplus for muscle building), not
 # individualized dietary advice — same disclaimer stance as
-# _PROTEIN_G_PER_KG above. Goals without an explicit entry default to
-# maintenance (0.0): eat_balanced/more_energy/better_focus/better_sleep
-# have no calorie-target rationale of their own.
+# _PROTEIN_G_PER_KG above. `maintain` has no calorie-target rationale of
+# its own, so it defaults to 0.0 via .get() below.
 _CALORIE_GOAL_ADJUSTMENT = {
     Goal.LOSE_WEIGHT_GRADUALLY: -0.175,  # midpoint of a commonly-cited -15% to -20% deficit
     Goal.BUILD_MUSCLE: 0.10,             # midpoint of a commonly-cited +5% to +15% surplus

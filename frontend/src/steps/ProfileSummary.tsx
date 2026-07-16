@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { Card, Field, PrimaryButton, inputCls } from "@/components/AppShell";
+import { Card, Field, PrimaryButton, SectionLabel, inputCls } from "@/components/AppShell";
 import { cn } from "@/lib/utils";
 import { useLanguage, type Lang } from "@/lib/i18n";
-import { getProfile, updateProfile, ApiError } from "@/lib/api";
+import { getProfile, updateProfile, exportMyData, ApiError } from "@/lib/api";
 import { STEPS, type StepDef } from "@/steps/ChatOnboardingStep";
 import type { IdealProfile, Profile, ProfileCreate } from "@/types/api";
 
@@ -328,12 +328,134 @@ function HouseholdCard({ profileId, profile }: { profileId: string; profile: Pro
   );
 }
 
+// E12 — Data & privacy controls (GDPR): export (S2/portability), revoke
+// health-data consent (S4), and delete the whole account (S3). All live in
+// the profile screen, which is the canonical "Edit Profile" home for FR-12.
+function PrivacyCard({
+  profileId,
+  consented,
+  onChanged,
+  onDeleteAccount,
+}: {
+  profileId: string;
+  consented: boolean;
+  onChanged: () => void;
+  onDeleteAccount: () => void;
+}) {
+  const { t } = useLanguage();
+  const [exporting, setExporting] = useState(false);
+  const [revoking, setRevoking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function doExport() {
+    setExporting(true);
+    setError(null);
+    try {
+      const data = await exportMyData();
+      // Trigger a client-side download of the JSON bundle.
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "naehrbert-my-data.json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : t("privacy.exportFailed"));
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function revokeConsent() {
+    setRevoking(true);
+    setError(null);
+    try {
+      // F15: stop Level-2 processing (multipliers revert to 1.0 server-side)
+      // and hide the invite; existing answers are kept (removable via delete
+      // or retrievable via export).
+      await updateProfile(profileId, { consent_level2: false });
+      onChanged();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : t("privacy.revokeFailed"));
+    } finally {
+      setRevoking(false);
+    }
+  }
+
+  return (
+    <Card className="space-y-6">
+      <header className="space-y-1">
+        <SectionLabel>{t("privacy.title")}</SectionLabel>
+        <p className="max-w-[56ch] text-sm text-ink/60">{t("privacy.body")}</p>
+      </header>
+
+      {/* S4 — health-data consent */}
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium tracking-tight text-ink">{t("privacy.consentTitle")}</p>
+          <p className="mt-0.5 text-xs text-ink/55">
+            {consented ? t("privacy.consentActive") : t("privacy.consentInactive")}
+          </p>
+        </div>
+        {consented ? (
+          <button
+            type="button"
+            onClick={revokeConsent}
+            disabled={revoking}
+            className="shrink-0 rounded-full px-4 py-2 text-xs font-medium tracking-tight text-ink/70 ring-1 ring-black/10 hover:bg-zinc-50 disabled:opacity-40"
+          >
+            {revoking ? t("privacy.revoking") : t("privacy.revoke")}
+          </button>
+        ) : null}
+      </div>
+
+      {/* S2 — data export */}
+      <div className="flex items-center justify-between gap-4 border-t border-black/5 pt-6">
+        <div>
+          <p className="text-sm font-medium tracking-tight text-ink">{t("privacy.exportTitle")}</p>
+          <p className="mt-0.5 text-xs text-ink/55">{t("privacy.exportBody")}</p>
+        </div>
+        <button
+          type="button"
+          onClick={doExport}
+          disabled={exporting}
+          className="shrink-0 rounded-full bg-zinc-100 px-4 py-2 text-xs font-medium tracking-tight text-ink ring-1 ring-black/5 hover:bg-zinc-200 disabled:opacity-40"
+        >
+          {exporting ? t("privacy.exporting") : t("privacy.exportButton")}
+        </button>
+      </div>
+
+      {/* S3 — account deletion (full erasure) */}
+      <div className="flex items-center justify-between gap-4 border-t border-black/5 pt-6">
+        <div>
+          <p className="text-sm font-medium tracking-tight text-ink">{t("privacy.deleteTitle")}</p>
+          <p className="mt-0.5 text-xs text-ink/55">{t("privacy.deleteBody")}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onDeleteAccount}
+          className="shrink-0 rounded-full px-4 py-2 text-xs font-medium tracking-tight text-red-600 ring-1 ring-red-200 hover:bg-red-50"
+        >
+          {t("privacy.deleteButton")}
+        </button>
+      </div>
+
+      {error ? <p className="text-xs text-red-600">{error}</p> : null}
+    </Card>
+  );
+}
+
 export function ProfileSummary({
   profileId,
   onLogout,
+  onDeleteAccount,
 }: {
   profileId: string;
   onLogout: () => void;
+  onDeleteAccount: () => void;
 }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -489,6 +611,14 @@ export function ProfileSummary({
             {saveError ? <p className="text-xs text-red-600">{saveError}</p> : null}
           </div>
         </Card>
+
+        {/* E12 — GDPR data & privacy controls (export / consent / delete). */}
+        <PrivacyCard
+          profileId={profileId}
+          consented={profile.consent_level2 === true}
+          onChanged={load}
+          onDeleteAccount={onDeleteAccount}
+        />
         </>
       ) : null}
     </section>

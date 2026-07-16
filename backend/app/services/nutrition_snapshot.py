@@ -57,6 +57,7 @@ def assemble_snapshot(
     matched: List[MatchedProduct],
     receipts_analyzed: int,
     user_profile: Optional[UserProfileLike] = None,
+    lang: str = "en",
 ) -> NutritionSnapshot:
     """
     Offline core: build a snapshot from already-mapped products.
@@ -64,14 +65,15 @@ def assemble_snapshot(
     `user_profile` is optional and only used to personalize the protein
     reference (weight/height/gender/activity — see
     services/nutrition_personalization.py); omit it for the existing
-    profile-agnostic behavior.
+    profile-agnostic behavior. `lang` (E13) localizes gap messages,
+    dimension labels and the disclaimer.
     """
 
     profile = build_profile(items, matched)
     confidence = nm.confidence_level(profile)
     protein_ref = personalized_protein_ref_per_1000kcal(user_profile)
-    gaps = detect_gaps(profile, confidence, protein_ref=protein_ref)
-    dimensions = nm.build_dimension_snapshots(profile, protein_ref=protein_ref)
+    gaps = detect_gaps(profile, confidence, protein_ref=protein_ref, lang=lang)
+    dimensions = nm.build_dimension_snapshots(profile, protein_ref=protein_ref, lang=lang)
 
     return NutritionSnapshot(
         receipts_analyzed=receipts_analyzed,
@@ -80,7 +82,7 @@ def assemble_snapshot(
         dimensions=dimensions,
         gaps=gaps,
         confidence=confidence,
-        disclaimer=nm.DISCLAIMER,
+        disclaimer=nm.disclaimer(lang),
     )
 
 
@@ -88,16 +90,18 @@ def build_snapshot(
     items: List[dict],
     receipts_analyzed: int,
     user_profile: Optional[UserProfileLike] = None,
+    lang: str = "en",
 ) -> NutritionSnapshot:
     """Map `items` via OpenFoodFacts, then assemble the snapshot."""
 
     matched = map_items(items).matched_products
-    return assemble_snapshot(items, matched, receipts_analyzed, user_profile)
+    return assemble_snapshot(items, matched, receipts_analyzed, user_profile, lang)
 
 
 def build_snapshot_from_db(
     user_id: str,
     user_profile: Optional[UserProfileLike] = None,
+    lang: str = "en",
 ) -> NutritionSnapshot:
     """
     Aggregate every receipt item from THIS session's receipts only
@@ -111,7 +115,7 @@ def build_snapshot_from_db(
     /next-cart's exclusion filtering) rather than fetching it again here.
     """
 
-    cache_key = (user_id, getattr(user_profile, "id", None))
+    cache_key = (user_id, getattr(user_profile, "id", None), lang)
     cached = _snapshot_cache.get(cache_key)
     if cached is not None and (time.time() - cached[0]) < _SNAPSHOT_CACHE_TTL_SECONDS:
         return cached[1]
@@ -134,7 +138,7 @@ def build_snapshot_from_db(
     # snapshot and match_quality feeds the event, no redundant OFF calls.
     mapping = map_items(items)
     log_event("match_rate", mapping.match_quality.model_dump(), user_id)
-    snapshot = assemble_snapshot(items, mapping.matched_products, receipts, user_profile)
+    snapshot = assemble_snapshot(items, mapping.matched_products, receipts, user_profile, lang)
 
     _snapshot_cache[cache_key] = (time.time(), snapshot)
     return snapshot
@@ -160,8 +164,9 @@ def build_snapshot_from_folder(folder: str) -> NutritionSnapshot:
     """
     Re-scan every receipt image in `folder`, parse items, and aggregate.
 
-    Imported lazily because the parser initialises the Gemini client at
-    import time (needs GEMINI_API_KEY), which the DB/offline paths don't.
+    Extraction is fully local (Tesseract/PyMuPDF, no API). Imported lazily to
+    keep the OCR/PDF dependencies off the DB/offline import paths that never
+    scan files.
     """
 
     from backend.app.services.receipt_parser import scan_receipt_bytes

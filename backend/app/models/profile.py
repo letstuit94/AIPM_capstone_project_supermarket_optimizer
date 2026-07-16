@@ -5,16 +5,19 @@ from pydantic import BaseModel, Field
 
 
 class Goal(str, Enum):
-    """Primary health goal (chat onboarding Q1). Drives which nutrient
-    the app leans on when explaining a recommendation (protein for
-    muscle, fiber for gradual weight loss, etc.) — see explainer.py."""
+    """Primary health goal (onboarding chat's last question). Drives the
+    BR-E6 calorie adjustment, the BR-M1 protein target, the BR-S5 goal
+    relevance lookup, and which nutrient the app leans on when explaining
+    a recommendation (protein for muscle, fiber for gradual weight loss)
+    — see ideal_profile.py, next_cart_engine.py, explainer.py.
 
-    BUILD_MUSCLE = "build_muscle"
-    MORE_ENERGY = "more_energy"
+    Exactly 3 options, matching the onboarding flow: lose weight, keep
+    weight/shape the same, or gain weight/muscle. BR-E6's fourth tier
+    ("aggressive" +15%) is intentionally not offered."""
+
     LOSE_WEIGHT_GRADUALLY = "lose_weight_gradually"
-    EAT_BALANCED = "eat_balanced"
-    BETTER_FOCUS = "better_focus"
-    BETTER_SLEEP = "better_sleep"
+    MAINTAIN = "maintain"
+    BUILD_MUSCLE = "build_muscle"
 
 
 class AgeRange(str, Enum):

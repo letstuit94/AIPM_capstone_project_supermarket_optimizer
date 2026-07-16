@@ -28,6 +28,7 @@ from backend.app.services.intake_estimator import (
     estimate_daily_protein_g,
     estimate_daily_calcium_mg,
 )
+from backend.app.services import i18n
 
 DISCLAIMER = "Based on estimated consumption from shopping habits only."
 
@@ -37,23 +38,16 @@ _ABSOLUTE_ESTIMATORS = {
     "calcium": estimate_daily_calcium_mg,
 }
 
-MESSAGES = {
-    "improving": "Your nutrition profile looks better compared to your last receipt — keep it up.",
-    "stable": "Your shopping habits look similar to last time — small changes add up over time.",
-    "declining": "A few dimensions look lower than last time — your next receipt will show if it evens out.",
-    "insufficient_data": "Upload another receipt next time you shop to start tracking your progress.",
-}
 
-
-def _no_history_report(receipts_compared: int = 1, absolute_deltas: Optional[List[DimensionDelta]] = None) -> ProgressReport:
+def _no_history_report(receipts_compared: int = 1, absolute_deltas: Optional[List[DimensionDelta]] = None, lang: str = "en") -> ProgressReport:
     return ProgressReport(
         has_history=False,
         receipts_compared=receipts_compared,
         deltas=[],
         trend="insufficient_data",
         addressed_gap_improved=None,
-        message=MESSAGES["insufficient_data"],
-        disclaimer=DISCLAIMER,
+        message=i18n.t(lang, "prog.insufficient_data"),
+        disclaimer=i18n.t(lang, "prog.disclaimer"),
         absolute_deltas=absolute_deltas or [],
     )
 
@@ -125,7 +119,7 @@ def _last_recommended_gap(user_id: str, before_receipt_created_at: Optional[str]
     return None
 
 
-def compute_session_progress(user_id: str) -> ProgressReport:
+def compute_session_progress(user_id: str, lang: str = "en") -> ProgressReport:
     """
     Compare this session's newest receipt against the one right before
     it. Returns has_history=False (not an error) when there's only one
@@ -143,7 +137,7 @@ def compute_session_progress(user_id: str) -> ProgressReport:
 
     receipts = get_receipts_by_user(user_id)  # newest-first (Task 8.4)
     if len(receipts) < 2:
-        return _no_history_report(receipts_compared=len(receipts), absolute_deltas=absolute_deltas)
+        return _no_history_report(receipts_compared=len(receipts), absolute_deltas=absolute_deltas, lang=lang)
 
     current_receipt, previous_receipt, *_ = receipts
 
@@ -163,6 +157,6 @@ def compute_session_progress(user_id: str) -> ProgressReport:
         deltas=delta.deltas,
         trend=trend,
         addressed_gap_improved=addressed_gap_improved,
-        message=MESSAGES[trend],
-        disclaimer=DISCLAIMER,
+        message=i18n.t(lang, f"prog.{trend}"),
+        disclaimer=i18n.t(lang, "prog.disclaimer"),
     )

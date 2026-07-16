@@ -4,7 +4,7 @@ Tests for Epic 3 — Receipt Ingestion (upload + extraction).
 Pure/offline: exercises unit normalization (E3-S3), the piece-weight table,
 the mock parser path (E3 offline mode), food/non-food separation (E3-S4),
 date/price extraction fields (E3-S2), and the typed extraction errors
-(E3-S5) by faking the Gemini client — no network, no DB, no quota.
+(E3-S5) for the LOCAL extractor — no network, no DB, no quota.
 
 Run from the repo root:
     python -m backend.app.scripts.test_receipt_ingestion
@@ -21,7 +21,6 @@ from backend.app.services.units import (
 )
 from backend.app.services.nutrition_profile import grams_for
 from backend.app.models.receipt import ParsedReceipt
-from google.genai.errors import ClientError, ServerError
 
 _PASS = 0
 _FAIL = 0
@@ -93,44 +92,31 @@ def test_mock_parser():
     check("validates as ParsedReceipt", validated.items_count, 4)
 
 
-# ── E3-S5: typed extraction errors (faked Gemini client) ─────────────────
-class _FakeModels:
-    def __init__(self, exc=None, text=None):
-        self._exc, self._text = exc, text
-
-    def generate_content(self, **_):
-        if self._exc:
-            raise self._exc
-        return type("R", (), {"text": self._text})()
-
-
-class _FakeClient:
-    def __init__(self, exc=None, text=None):
-        self.models = _FakeModels(exc, text)
-
-
-def _extract_with(client):
-    """Run _extract_items against a faked client, mock mode forced off."""
-    prev_client, prev_mock = rp.client, rp.MOCK_MODE
-    rp.client, rp.MOCK_MODE = client, False
+# ── E3-S5: typed extraction errors (local extractor, no Gemini) ──────────
+def _scan(file_bytes, filename):
+    """Run scan_receipt_bytes with mock mode forced off."""
+    prev_mock = rp.MOCK_MODE
+    rp.MOCK_MODE = False
     try:
-        return rp._extract_items(["x"], max_retries=1)
+        return rp.scan_receipt_bytes(file_bytes=file_bytes, filename=filename)
     finally:
-        rp.client, rp.MOCK_MODE = prev_client, prev_mock
+        rp.MOCK_MODE = prev_mock
 
 
 def test_typed_errors():
-    print("E3-S5: typed extraction errors")
-    quota = ClientError(429, {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED", "message": "quota"}})
-    check("429 → rate_limited", _extract_with(_FakeClient(exc=quota)).get("error_code"), rp.ERROR_RATE_LIMITED)
-
-    bad_req = ClientError(400, {"error": {"code": 400, "status": "INVALID_ARGUMENT", "message": "bad mime"}})
-    check("4xx → invalid", _extract_with(_FakeClient(exc=bad_req)).get("error_code"), rp.ERROR_INVALID)
-
-    down = ServerError(503, {"error": {"code": 503, "status": "UNAVAILABLE", "message": "down"}})
-    check("5xx → unavailable", _extract_with(_FakeClient(exc=down)).get("error_code"), rp.ERROR_UNAVAILABLE)
-
-    check("bad JSON → invalid", _extract_with(_FakeClient(text="{not json")).get("error_code"), rp.ERROR_INVALID)
+    print("E3-S5: typed extraction errors (local, no rate limits)")
+    # Corrupt bytes with an image extension → unreadable → invalid (422).
+    check("corrupt image → invalid",
+          _scan(b"this is not an image", "receipt.png").get("error_code"),
+          rp.ERROR_INVALID)
+    # Corrupt bytes with a pdf extension → unreadable → invalid.
+    check("corrupt pdf → invalid",
+          _scan(b"%PDF-not-really", "receipt.pdf").get("error_code"),
+          rp.ERROR_INVALID)
+    # Unsupported file type → invalid.
+    check("unsupported type → invalid",
+          _scan(b"whatever", "receipt.xyz").get("error_code"),
+          rp.ERROR_INVALID)
 
 
 # ── E3-S5: API maps error codes to HTTP statuses ─────────────────────────
@@ -167,6 +153,30 @@ def test_offline_text_parser():
     check("count unit (10 Stk → piece)", eier["unit"], "piece")
 
 
+def test_block_layout_parser():
+    print("E3: block-layout parser (eBon PDF — price on the next line)")
+    from backend.app.services.receipt_text_parser import parse_receipt_text_offline
+    txt = (
+        "NETTO\n"
+        "Filiale 7761\n"
+        "EUR\n"
+        "Beste Ernte Kichererbsen 265g\n0,59\nB\n"
+        "Irische Butter Kerrygold 250g\n1,49\nB\n"
+        "1,266 kg x\n1,29 EUR/kg\nBananen Lose MT\n1,63\nB\n"
+        "Pfand\n0,25\nB\n"
+        "SUMME [3]\n3,71\n"
+    )
+    r = parse_receipt_text_offline(txt)
+    check("block store detected", r["store"], "Netto")
+    check("3 food items (summe/pfand excluded)", r["items_count"], 3)
+    check("Pfand → non-food", any("Pfand" in n for n in r["non_food_items_ignored"]), True)
+    banane = next(i for i in r["items"] if "Banane" in i["name"])
+    check("weighed item unit kg", banane["unit"], "kg")
+    check("weighed item qty 1.266", banane["quantity"], 1.266)
+    kicher = next(i for i in r["items"] if "Kichererbsen" in i["name"])
+    check("block price parsed", kicher["price"], 0.59)
+
+
 def main():
     for fn in (
         test_unit_normalization,
@@ -175,6 +185,7 @@ def main():
         test_typed_errors,
         test_error_status_map,
         test_offline_text_parser,
+        test_block_layout_parser,
     ):
         fn()
     print(f"\n{_PASS} passed, {_FAIL} failed")

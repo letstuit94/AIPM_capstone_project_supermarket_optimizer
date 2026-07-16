@@ -34,6 +34,7 @@ from backend.app.models.snapshot import (
     DimensionSnapshot,
     ConfidenceLevel,
 )
+from backend.app.services import i18n
 
 # ─────────────────────────────────────────────────────────────
 # References / thresholds
@@ -73,6 +74,11 @@ DISCLAIMER = (
     "Receipts can't capture meals eaten out, shared food, or what you "
     "actually ate. This is not medical advice."
 )
+
+
+def disclaimer(lang: str = "en") -> str:
+    """Localized data-sufficiency/not-medical-advice disclaimer (E13)."""
+    return i18n.t(lang, "disclaimer")
 
 # Neutral, non-diagnostic one-liners for the snapshot (Story 4.1).
 WHAT_THIS_MEANS = {
@@ -124,7 +130,7 @@ def _ratio(value: Optional[float], reference: float) -> Optional[float]:
 
 
 def build_dimension_snapshots(
-    profile: NutritionProfile, protein_ref: Optional[float] = None
+    profile: NutritionProfile, protein_ref: Optional[float] = None, lang: str = "en"
 ) -> List[DimensionSnapshot]:
     """
     Assemble the display rows for the snapshot (Story 4.1).
@@ -133,6 +139,8 @@ def build_dimension_snapshots(
     a personalized value (see services/nutrition_personalization.py) —
     the displayed reference then matches whatever gap_detector.py
     actually used, instead of silently showing the generic guideline.
+
+    `lang` (E13) localizes the unit labels and the "what this means" copy.
     """
 
     effective_protein_ref = protein_ref or PROTEIN_REF_PER_1000KCAL
@@ -141,47 +149,47 @@ def build_dimension_snapshots(
         DimensionSnapshot(
             dimension="fiber",
             value=profile.fiber_per_1000kcal,
-            unit="g per 1000 kcal",
+            unit=i18n.t(lang, "unit.g_per_1000kcal"),
             reference=FIBER_REF_PER_1000KCAL,
             ratio=_ratio(profile.fiber_per_1000kcal, FIBER_REF_PER_1000KCAL),
             status=classify_fiber(profile.fiber_per_1000kcal),
-            what_this_means=WHAT_THIS_MEANS["fiber"],
+            what_this_means=i18n.t(lang, "wtm.fiber"),
         ),
         DimensionSnapshot(
             dimension="protein",
             value=profile.protein_per_1000kcal,
-            unit="g per 1000 kcal",
+            unit=i18n.t(lang, "unit.g_per_1000kcal"),
             reference=effective_protein_ref,
             ratio=_ratio(profile.protein_per_1000kcal, effective_protein_ref),
             status=classify_protein(profile.protein_per_1000kcal, effective_protein_ref),
-            what_this_means=WHAT_THIS_MEANS["protein"],
+            what_this_means=i18n.t(lang, "wtm.protein"),
         ),
         DimensionSnapshot(
             dimension="sugar",
             value=profile.sugar_pct_energy,
-            unit="% of energy",
+            unit=i18n.t(lang, "unit.pct_energy"),
             reference=SUGAR_MAX_PCT_ENERGY,
             ratio=_ratio(profile.sugar_pct_energy, SUGAR_MAX_PCT_ENERGY),
             status=classify_sugar(profile.sugar_pct_energy),
-            what_this_means=WHAT_THIS_MEANS["sugar"],
+            what_this_means=i18n.t(lang, "wtm.sugar"),
         ),
         DimensionSnapshot(
             dimension="processed",
             value=profile.processed_avg,
-            unit="avg NOVA (1-4)",
+            unit=i18n.t(lang, "unit.nova"),
             reference=PROCESSED_MAX_AVG,
             ratio=_ratio(profile.processed_avg, PROCESSED_MAX_AVG),
             status=classify_processed(profile.processed_avg),
-            what_this_means=WHAT_THIS_MEANS["processed"],
+            what_this_means=i18n.t(lang, "wtm.processed"),
         ),
         DimensionSnapshot(
             dimension="calories",
             value=profile.total_calories_kcal,
-            unit="kcal (basket total, estimated)",
+            unit=i18n.t(lang, "unit.kcal_basket"),
             reference=None,
             ratio=None,
             status="info",
-            what_this_means=WHAT_THIS_MEANS["calories"],
+            what_this_means=i18n.t(lang, "wtm.calories"),
         ),
     ]
 

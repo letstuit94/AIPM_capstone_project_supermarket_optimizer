@@ -18,17 +18,19 @@ from backend.app.analytics.events import log_event
 from backend.app.db.supabase import (
     create_receipt_row,
     update_receipt_with_parse,
+    clear_receipt_storage_path,
     get_receipt,
     get_receipt_items,
+    get_receipt_items_by_user,
     update_receipt_item,
     delete_receipt,
     get_receipts_by_user,
     UNDEFINED_COLUMN_CODE,
 )
 from backend.app.db.receipt_items_repo import insert_receipt_items
-from backend.app.services.pantry import add_items_to_pantry
+from backend.app.services.pantry import add_items_to_pantry, mark_unavailable
 from backend.app.models.receipt import ParsedReceipt, ReceiptItemUpdate, ReceiptItemMatch
-from backend.app.services import verified_matches
+from backend.app.services import verified_matches, non_food_terms
 from backend.app.services.nutrition_mapping import map_items
 from backend.app.services.nutrition_snapshot import invalidate_snapshot_cache
 from backend.app.services.confidence import confidence_for_product
@@ -44,6 +46,10 @@ _PARSE_ERROR_STATUS = {
     ERROR_UNAVAILABLE: 503,    # service temporarily down
     ERROR_INVALID: 422,        # not a parseable receipt / bad input
 }
+
+# Onboarding's baseline-upload gate (E1): keep uploading receipts until this
+# many food line items have been logged, across as many receipts as it takes.
+ONBOARDING_ITEM_TARGET = 50
 
 
 @router.post("/receipts")
@@ -109,6 +115,13 @@ async def upload_receipt(
             user_id,
         )
 
+    # E3-S4 follow-up: strip any item previously learned as non-food (via
+    # Review's "Not food" button on an earlier receipt) — a second pass
+    # after the parser's own static keyword filter, before anything is
+    # persisted or added to the pantry.
+    if isinstance(parsed, dict):
+        parsed = non_food_terms.filter_learned_non_food(parsed)
+
     # Story 1.4: validate parser output against the structured schema
     try:
         validated = ParsedReceipt.model_validate(parsed)
@@ -139,6 +152,20 @@ async def upload_receipt(
 
     update_receipt_with_parse(receipt_id, parsed)
     insert_receipt_items(receipt_id, parsed)
+
+    # E12-S5 / BR-P4 retention: the raw receipt image isn't needed once it's
+    # parsed — extraction already ran (locally), and nothing in the app ever
+    # displays it back. So delete it from storage immediately after
+    # successful processing and null the column. Best-effort: a storage
+    # hiccup must not fail an otherwise-successful upload.
+    if storage_path:
+        try:
+            delete_receipt_bytes(storage_path)
+            clear_receipt_storage_path(receipt_id)
+            storage_path = None
+        except Exception as exc:
+            log_event("image_retention_delete_failed", {"error": str(exc)}, user_id)
+
     # Pantry sync is a side-effect of the upload — a schema gap in an
     # unmigrated pantry_items table (e.g. missing user_id column) must not
     # 500 the whole receipt (same non-fatal stance as storage, E3-S5).
@@ -185,6 +212,30 @@ def list_receipts(user_id: str = Depends(get_current_user)):
         receipts = []
 
     return {"user_id": user_id, "receipts": receipts}
+
+
+@router.get("/receipts/progress")
+def receipt_upload_progress(user_id: str = Depends(get_current_user)):
+    """
+    Cumulative count of food line items this user has ever uploaded, across
+    every receipt they've submitted — the onboarding baseline-upload gate
+    (E1): keep uploading until `count` reaches `ONBOARDING_ITEM_TARGET`.
+
+    Not deduplicated: buying the same product twice counts twice, matching
+    how many line items the user actually had to review. Items marked
+    non-food (`non_food_terms.NON_FOOD_CATEGORY`) never counted as food to
+    begin with, so they're excluded here too.
+    """
+
+    try:
+        items = get_receipt_items_by_user(user_id)
+    except APIError as e:
+        if e.code != UNDEFINED_COLUMN_CODE:
+            raise
+        items = []
+
+    count = sum(1 for item in items if not non_food_terms.is_non_food_category(item.get("category")))
+    return {"count": count, "target": ONBOARDING_ITEM_TARGET, "complete": count >= ONBOARDING_ITEM_TARGET}
 
 
 @router.get("/receipts/{receipt_id}")
@@ -251,6 +302,26 @@ def _find_item(receipt_id: str, item_id: str) -> dict:
     raise HTTPException(status_code=404, detail="Item not found for this receipt.")
 
 
+def _assert_owner(receipt: dict, user_id: str) -> None:
+    """
+    Reject access to a receipt owned by another user. A row with no
+    user_id on record (legacy/pre-auth data) is treated as unowned and
+    still accessible, matching this codebase's migration-window safety nets.
+
+    Bug fix: pick_item_match and flag_no_match called this function
+    without it ever being defined here (it only existed in api/profile.py)
+    — every call crashed with a NameError -> 500, silently, since the
+    frontend's pick() has no catch block. That meant every "Use this" /
+    "No match" click in Review appeared to do nothing (issue report) and
+    verified_matches/no_match_queue never received a single row despite
+    the write code being otherwise correct.
+    """
+
+    owner = receipt.get("user_id")
+    if owner is not None and owner != user_id:
+        raise HTTPException(status_code=403, detail="This receipt belongs to a different user.")
+
+
 @router.post("/receipts/{receipt_id}/items/{item_id}/match")
 def pick_item_match(
     receipt_id: str,
@@ -273,10 +344,16 @@ def pick_item_match(
     _assert_owner(receipt, user_id)
     item = _find_item(receipt_id, item_id)
 
-    # repoint the stored item to the chosen product
+    # Repoint the stored item to the chosen product. `confidence` is set to
+    # 1.0 here too — a manual pick IS a confirmed match, so the review UI's
+    # confidence badge should flip to "Confident" immediately instead of
+    # silently keeping whatever low/uncertain score the parser guessed at
+    # extraction time (a real bug the user would otherwise have no visible
+    # sign their correction actually took effect).
     update_receipt_item(item_id, {
         "normalized_name": pick.matched_name,
         "matched_product_id": pick.off_id or pick.bls_code,
+        "confidence": 1.0,
     })
 
     store = _receipt_store(receipt)
@@ -322,6 +399,54 @@ def flag_no_match(
     return {"receipt_id": receipt_id, "item_id": item_id, "logged": True, "count": entry.get("count")}
 
 
+@router.post("/receipts/{receipt_id}/items/{item_id}/non-food")
+def mark_item_non_food(
+    receipt_id: str,
+    item_id: str,
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Mark a mis-classified line as non-food (E3-S4 follow-up — the manual
+    safety net for whatever the parser's fixed keyword list doesn't catch,
+    now that Gemini's semantic classification is gone from the receipt
+    path). Three effects:
+
+      1. the item's category is set to the "non_food" sentinel, which the
+         resolver (services/resolver.py) recognizes and excludes from all
+         nutrition matching from now on — never OFF/BLS-matched, never
+         contributing fake "other"-category nutrition;
+      2. its quantity is removed from the pantry's running stock (it was
+         wrongly added there at upload time, before this correction);
+      3. its raw text is learned (services/non_food_terms.py), so future
+         receipts with the same line are stripped out automatically at
+         parse time, before they ever become a receipt_items row.
+    """
+
+    receipt = get_receipt(receipt_id)
+    if receipt is None:
+        raise HTTPException(status_code=404, detail="Receipt not found.")
+    _assert_owner(receipt, user_id)
+    item = _find_item(receipt_id, item_id)
+
+    update_receipt_item(item_id, {"category": non_food_terms.NON_FOOD_CATEGORY})
+
+    name = item.get("normalized_name") or item.get("raw_name")
+    quantity = item.get("quantity")
+    if name and quantity:
+        try:
+            mark_unavailable(user_id, name, float(quantity))
+        except Exception as exc:  # pantry sync is a side-effect, never fatal
+            log_event("pantry_sync_failed", {"error": str(exc)}, user_id)
+
+    learned_key = non_food_terms.record_non_food_term(
+        item.get("raw_name") or item.get("normalized_name") or ""
+    )
+
+    invalidate_snapshot_cache(user_id)
+    log_event("item_marked_non_food", {"item_id": item_id, "learned_key": learned_key}, user_id)
+    return {"receipt_id": receipt_id, "item_id": item_id, "category": non_food_terms.NON_FOOD_CATEGORY}
+
+
 @router.delete("/receipts/{receipt_id}")
 def erase_receipt(receipt_id: str, user_id: str = Depends(get_current_user)):
     """
@@ -342,10 +467,7 @@ def erase_receipt(receipt_id: str, user_id: str = Depends(get_current_user)):
     receipt = get_receipt(receipt_id)
     if receipt is None:
         raise HTTPException(status_code=404, detail="Receipt not found.")
-
-    owner_session_id = receipt.get("user_id")
-    if owner_session_id is not None and owner_session_id != user_id:
-        raise HTTPException(status_code=403, detail="This receipt belongs to a different session.")
+    _assert_owner(receipt, user_id)
 
     storage_path = receipt.get("storage_path")
     if storage_path:

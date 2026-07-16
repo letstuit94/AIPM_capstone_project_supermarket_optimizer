@@ -3,7 +3,7 @@ import { Card, PrimaryButton, SectionLabel, inputCls } from "@/components/AppShe
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/lib/i18n";
 import { uploadReceiptFiles, uploadReceiptText, receiptErrorKey, ApiError } from "@/lib/api";
-import type { UploadReceiptResponse } from "@/types/api";
+import type { ReceiptUploadProgress, UploadReceiptResponse } from "@/types/api";
 
 const ACCEPT = "image/jpeg,image/png,image/webp,application/pdf";
 
@@ -19,10 +19,18 @@ type Mode = "image" | "text";
 // means "continue the onboarding journey", never "revisit an existing one".
 export function OnboardingUploadStep({
   profileName,
+  itemProgress,
   onUploaded,
   onSkip,
 }: {
   profileName?: string | null;
+  // E1's baseline-upload gate: cumulative food items uploaded so far vs.
+  // the target that unlocks the rest of the app. Owned by App.tsx (it's
+  // also what decides, after each Review, whether to loop back here or
+  // continue) — null only for the brief moment before the first fetch
+  // resolves. Named distinctly from the per-file upload `progress` state
+  // below (that one tracks "processing 2 of 5 files", not food items).
+  itemProgress: ReceiptUploadProgress | null;
   onUploaded: (receiptId: string) => void;
   onSkip: () => void;
 }) {
@@ -79,9 +87,19 @@ export function OnboardingUploadStep({
     }
   }
 
-  const greeting = profileName
-    ? t("onboardingUpload.greetingWithName").replace("{name}", profileName)
-    : t("onboardingUpload.greeting");
+  // First visit (nothing uploaded yet) gets the name-aware intro; every
+  // subsequent loop back here (still under target) gets the shorter
+  // "keep going" nudge instead of repeating the same greeting.
+  const greeting =
+    itemProgress && itemProgress.count > 0
+      ? t("onboardingUpload.greetingMore")
+      : profileName
+        ? t("onboardingUpload.greetingWithName").replace("{name}", profileName)
+        : t("onboardingUpload.greeting");
+
+  const itemPct = itemProgress
+    ? Math.min(100, Math.round((itemProgress.count / itemProgress.target) * 100))
+    : 0;
 
   return (
     <section className="space-y-5 px-6 pb-16">
@@ -108,6 +126,24 @@ export function OnboardingUploadStep({
           {t("onboardingUpload.progressReceipt")}
         </span>
       </div>
+
+      {/* E1's baseline-upload gate: keep uploading until 50 food items are
+          logged, across as many receipts as it takes. */}
+      {itemProgress ? (
+        <div className="mx-auto max-w-md space-y-1.5">
+          <div className="flex items-center justify-between text-[11px] font-medium uppercase tracking-widest text-ink/40">
+            <span>{t("onboardingUpload.itemProgressLabel")}</span>
+            <span>
+              {t("onboardingUpload.itemProgressCount")
+                .replace("{count}", String(itemProgress.count))
+                .replace("{target}", String(itemProgress.target))}
+            </span>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
+            <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${itemPct}%` }} />
+          </div>
+        </div>
+      ) : null}
 
       <Card className="space-y-4">
         <div className="flex items-start gap-2">

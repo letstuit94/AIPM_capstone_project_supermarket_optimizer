@@ -12,6 +12,38 @@ export type Lang = "en" | "de";
 const LANGUAGE_KEY = "nutriwise.language";
 
 const STRINGS: Record<string, { en: string; de: string }> = {
+  // Auth (E1 sign-up / login / age gate, AuthScreen.tsx)
+  "auth.welcomeBack": { en: "Welcome back.", de: "Willkommen zurück." },
+  "auth.createSubtitle": { en: "Create your account.", de: "Erstelle dein Konto." },
+  "auth.login": { en: "Log in", de: "Anmelden" },
+  "auth.signup": { en: "Sign up", de: "Registrieren" },
+  "auth.email": { en: "Email", de: "E-Mail" },
+  "auth.password": { en: "Password", de: "Passwort" },
+  "auth.dob": { en: "Date of birth", de: "Geburtsdatum" },
+  "auth.ageHint": { en: "You must be at least {age}.", de: "Du musst mindestens {age} sein." },
+  "auth.pleaseWait": { en: "Please wait…", de: "Bitte warten…" },
+  "auth.createAccount": { en: "Create account", de: "Konto erstellen" },
+  "auth.or": { en: "or", de: "oder" },
+  "auth.google": { en: "Continue with Google", de: "Mit Google fortfahren" },
+  "auth.disclaimer": {
+    en: "Nährbert provides general nutrition information, not medical advice.",
+    de: "Nährbert bietet allgemeine Ernährungsinformationen, keine medizinische Beratung.",
+  },
+  "auth.errNoDob": { en: "Please enter your date of birth.", de: "Bitte gib dein Geburtsdatum ein." },
+  "auth.errUnderage": {
+    en: "You must be at least {age} to use Nährbert.",
+    de: "Du musst mindestens {age} Jahre alt sein, um Nährbert zu nutzen.",
+  },
+  "auth.noticeConfirm": {
+    en: "Account created — check your email to confirm, then log in.",
+    de: "Konto erstellt — bestätige deine E-Mail und melde dich dann an.",
+  },
+  "auth.errGeneric": { en: "Something went wrong.", de: "Etwas ist schiefgelaufen." },
+  "auth.noticeExists": {
+    en: "This email already has an account — please log in.",
+    de: "Für diese E-Mail existiert bereits ein Konto — bitte melde dich an.",
+  },
+
   // Landing / demo entry point (LandingStep.tsx)
   "landing.badge": { en: "A NUTRITION COACH, ON AUTOPILOT", de: "EIN ERNÄHRUNGS-COACH, IM HINTERGRUND" },
   "landing.titleLine1": { en: "Your nutrition,", de: "Deine Ernährung," },
@@ -60,12 +92,12 @@ const STRINGS: Record<string, { en: string; de: string }> = {
     de: "NutriWise · geschätzt aus deinem Einkaufsverhalten, nicht dem tatsächlichen Verzehr",
   },
   "common.loading": { en: "Loading…", de: "Wird geladen…" },
-  "footer.deleteData": { en: "Delete or reset my data", de: "Daten löschen oder zurücksetzen" },
+  "footer.deleteData": { en: "Delete my account", de: "Konto löschen" },
   "footer.deleteConfirm": {
-    en: "Delete the receipt and profile stored for your account? This can't be undone.",
-    de: "Kassenbon und Profil deines Kontos löschen? Das kann nicht rückgängig gemacht werden.",
+    en: "Permanently delete your account and ALL your data — receipts, pantry, profile and health answers? You'll be signed out. This cannot be undone.",
+    de: "Dein Konto und ALLE deine Daten — Kassenbons, Vorrat, Profil und Gesundheitsangaben — endgültig löschen? Du wirst abgemeldet. Das kann nicht rückgängig gemacht werden.",
   },
-  "footer.deleteFailed": { en: "Could not delete your data.", de: "Daten konnten nicht gelöscht werden." },
+  "footer.deleteFailed": { en: "Could not delete your account.", de: "Konto konnte nicht gelöscht werden." },
   "review.uploadFirst": { en: "Upload a receipt first.", de: "Lade zuerst einen Kassenbon hoch." },
   "review.goToPantry": { en: "Go to pantry", de: "Zum Lager" },
   "footer.privacy": { en: "Privacy policy", de: "Datenschutz" },
@@ -148,6 +180,39 @@ const STRINGS: Record<string, { en: string; de: string }> = {
   "profile.goToOnboarding": { en: "Go to onboarding", de: "Zum Onboarding" },
   "profile.userId": { en: "User ID", de: "Nutzer-ID" },
   "profile.logout": { en: "Log out", de: "Abmelden" },
+
+  // E12 — data & privacy (GDPR: export / consent / delete)
+  "privacy.title": { en: "Your data & privacy", de: "Deine Daten & Privatsphäre" },
+  "privacy.body": {
+    en: "You're in control of your data. Export it, withdraw health-data consent, or delete your account entirely.",
+    de: "Du hast die Kontrolle über deine Daten. Exportiere sie, widerrufe die Einwilligung zu Gesundheitsdaten oder lösche dein Konto vollständig.",
+  },
+  "privacy.consentTitle": { en: "Health-data consent", de: "Einwilligung Gesundheitsdaten" },
+  "privacy.consentActive": {
+    en: "Granted — your symptom answers personalize recommendations.",
+    de: "Erteilt — deine Symptom-Angaben personalisieren die Empfehlungen.",
+  },
+  "privacy.consentInactive": {
+    en: "Not active — no health data is being processed.",
+    de: "Nicht aktiv — es werden keine Gesundheitsdaten verarbeitet.",
+  },
+  "privacy.revoke": { en: "Revoke consent", de: "Einwilligung widerrufen" },
+  "privacy.revoking": { en: "Revoking…", de: "Wird widerrufen…" },
+  "privacy.revokeFailed": { en: "Could not revoke consent.", de: "Einwilligung konnte nicht widerrufen werden." },
+  "privacy.exportTitle": { en: "Export my data", de: "Meine Daten exportieren" },
+  "privacy.exportBody": {
+    en: "Download everything we hold (profile, receipts, targets) as a JSON file.",
+    de: "Lade alles herunter, was wir speichern (Profil, Kassenbons, Ziele), als JSON-Datei.",
+  },
+  "privacy.exportButton": { en: "Download (JSON)", de: "Herunterladen (JSON)" },
+  "privacy.exporting": { en: "Preparing…", de: "Wird vorbereitet…" },
+  "privacy.exportFailed": { en: "Could not export your data.", de: "Daten konnten nicht exportiert werden." },
+  "privacy.deleteTitle": { en: "Delete my account", de: "Konto löschen" },
+  "privacy.deleteBody": {
+    en: "Permanently erase your account and all personal data. This cannot be undone.",
+    de: "Lösche dein Konto und alle personenbezogenen Daten endgültig. Das kann nicht rückgängig gemacht werden.",
+  },
+  "privacy.deleteButton": { en: "Delete account", de: "Konto löschen" },
 
   // E7 analysis (ideal vs status-quo)
   "analysis.title": { en: "Your nutrition score", de: "Dein Ernährungs-Score" },
@@ -344,12 +409,21 @@ const STRINGS: Record<string, { en: string; de: string }> = {
   "onboardingUpload.titleLine1": { en: "One last thing —", de: "Eine letzte Sache —" },
   "onboardingUpload.titleLine2": { en: "your baseline.", de: "deine Baseline." },
   "onboardingUpload.greetingWithName": {
-    en: "Great, {name}! Upload your first receipt so I can see what's already in your kitchen — this becomes the baseline everything else compares against.",
-    de: "Perfekt, {name}! Lade deinen ersten Kassenbon hoch, damit ich sehe, was bei dir schon in der Küche steht — das wird die Baseline, mit der alles Weitere verglichen wird.",
+    en: "Great, {name}! Upload as many receipts as you can now — a digital receipt from a supermarket loyalty app works best, or a clean, upright photo. Once you've logged 50 food items, you're through.",
+    de: "Perfekt, {name}! Lade jetzt so viele Kassenzettel wie möglich hoch — im Idealfall als digitalen Bon aus einer Supermarkt-Loyalitäts-App oder als saubere, gerade Fotos. Sobald du 50 Lebensmittel erfasst hast, geht's weiter.",
   },
   "onboardingUpload.greeting": {
-    en: "Upload your first receipt so I can see what's already in your kitchen — this becomes the baseline everything else compares against.",
-    de: "Lade deinen ersten Kassenbon hoch, damit ich sehe, was bei dir schon in der Küche steht — das wird die Baseline, mit der alles Weitere verglichen wird.",
+    en: "Upload as many receipts as you can now — a digital receipt from a supermarket loyalty app works best, or a clean, upright photo. Once you've logged 50 food items, you're through.",
+    de: "Lade jetzt so viele Kassenzettel wie möglich hoch — im Idealfall als digitalen Bon aus einer Supermarkt-Loyalitäts-App oder als saubere, gerade Fotos. Sobald du 50 Lebensmittel erfasst hast, geht's weiter.",
+  },
+  "onboardingUpload.greetingMore": {
+    en: "Great — keep going! Upload another receipt.",
+    de: "Weiter so! Lade noch einen Kassenzettel hoch.",
+  },
+  "onboardingUpload.itemProgressLabel": { en: "Baseline progress", de: "Baseline-Fortschritt" },
+  "onboardingUpload.itemProgressCount": {
+    en: "{count} of {target} food items",
+    de: "{count} von {target} Lebensmitteln",
   },
   "onboardingUpload.skip": { en: "I'll do this later", de: "Das mache ich später" },
 
@@ -387,8 +461,18 @@ const STRINGS: Record<string, { en: string; de: string }> = {
   "review.useThis": { en: "Use this", de: "Übernehmen" },
   "review.noMatch": { en: "No match found", de: "Kein Treffer" },
   "review.noMatchLogged": { en: "Logged — thanks.", de: "Notiert — danke." },
+  "review.noMatchFailed": { en: "Could not log this.", de: "Konnte nicht notiert werden." },
   "review.picked": { en: "Saved & learned for next time.", de: "Gespeichert & für nächstes Mal gelernt." },
+  "review.pickFailed": { en: "Could not save this match.", de: "Treffer konnte nicht gespeichert werden." },
   "review.close": { en: "Close", de: "Schließen" },
+
+  // Not-food marking (E3-S4 follow-up — Gemini's semantic non-food
+  // classification is gone, so this is the manual safety net).
+  "review.markNonFood": { en: "Not food", de: "Kein Lebensmittel" },
+  "review.markingNonFood": { en: "Marking…", de: "Wird markiert…" },
+  "review.markNonFoodFailed": { en: "Could not mark this as non-food.", de: "Konnte nicht als kein Lebensmittel markiert werden." },
+  "review.notFoodLabel": { en: "not food", de: "kein Lebensmittel" },
+  "review.notFoodBadge": { en: "Not food", de: "Kein Lebensmittel" },
 
   // Results step — now also the merged "Overview"/home page (formerly
   // DashboardStep.tsx's mockup): greeting, inactivity reminder, and the
@@ -400,6 +484,10 @@ const STRINGS: Record<string, { en: string; de: string }> = {
     de: "Fasst alle bisher hochgeladenen Kassenbons zusammen — nicht nur den letzten.",
   },
   "results.refresh": { en: "Refresh", de: "Aktualisieren" },
+  // FR-11.3 upload action + FR-11.4 counter on the dashboard hub.
+  "results.uploadReceipt": { en: "Upload a receipt", de: "Kassenbon hochladen" },
+  "results.receiptsCounter": { en: "receipts", de: "Kassenbons" },
+  "results.itemsCounter": { en: "items", de: "Artikel" },
   "results.greetingFallback": { en: "Welcome back", de: "Willkommen zurück" },
   "results.reminderText": {
     en: "You haven't confirmed anything in {days} days — your estimates are getting less accurate.",
@@ -431,6 +519,16 @@ const STRINGS: Record<string, { en: string; de: string }> = {
   "results.matchedVia": { en: "matched via OpenFoodFacts ·", de: "über OpenFoodFacts zugeordnet ·" },
   "results.estimatedByCategory": { en: "estimated by category", de: "nach Kategorie geschätzt" },
   "results.noData": { en: "no data", de: "keine Daten" },
+  // Gap status + trend direction words (detail + progress views), E13.
+  "status.low": { en: "low", de: "niedrig" },
+  "status.high": { en: "high", de: "hoch" },
+  "status.ok": { en: "ok", de: "ok" },
+  "status.info": { en: "info", de: "Info" },
+  "results.perDay": { en: "per day", de: "pro Tag" },
+  "delta.up": { en: "up", de: "höher" },
+  "delta.down": { en: "down", de: "niedriger" },
+  "delta.flat": { en: "flat", de: "gleich" },
+  "delta.unknown": { en: "n/a", de: "k. A." },
   "results.nutritionSnapshot": { en: "Nutrition snapshot", de: "Nährwert-Übersicht" },
   "results.topGaps": { en: "Top gaps", de: "Wichtigste Lücken" },
   "results.candidatesChecked": { en: "candidates checked", de: "Kandidaten geprüft" },
@@ -531,6 +629,21 @@ const STRINGS: Record<string, { en: string; de: string }> = {
 
   // Diary ("Tagebuch") — day-by-day confirmation of what was actually
   // eaten, split out of the old combined Pantry page (DiaryStep.tsx).
+  // Eaten / consumption feedback (E10, EatenFeedbackCard.tsx)
+  "eaten.titleA": { en: "Before your next shop", de: "Bevor du neu einkaufst" },
+  "eaten.titleB": { en: "How did your last shop go?", de: "Wie war dein letzter Einkauf?" },
+  "eaten.body": {
+    en: "Tell us what happened to your last shop. Anything you threw away is left out of your intake estimate.",
+    de: "Sag uns, was aus deinem letzten Einkauf wurde. Was du weggeworfen hast, zählt nicht zu deiner Aufnahme.",
+  },
+  "eaten.itemEaten": { en: "Ate it", de: "Gegessen" },
+  "eaten.itemHave": { en: "Still have", de: "Noch da" },
+  "eaten.itemThrown": { en: "Threw away", de: "Weggeworfen" },
+  "eaten.submit": { en: "Save", de: "Speichern" },
+  "eaten.saving": { en: "Saving…", de: "Wird gespeichert…" },
+  "eaten.skip": { en: "Skip", de: "Überspringen" },
+  "eaten.error": { en: "Could not save your feedback.", de: "Feedback konnte nicht gespeichert werden." },
+
   "diary.step": { en: "Diary", de: "Tagebuch" },
   "diary.title": { en: "What did you eat?", de: "Was hast du gegessen?" },
   "diary.body": {
@@ -563,12 +676,55 @@ export function t(key: string, lang: Lang): string {
   return STRINGS[key]?.[lang] ?? key;
 }
 
+// E13: display names for the raw nutrient/dimension keys the backend emits
+// (bars, gap/dimension labels). The backend spells nutrient nouns inline in
+// its localized prose; the frontend localizes the standalone key labels here.
+const NUTRIENT_LABELS: Record<string, { en: string; de: string }> = {
+  fiber: { en: "Fiber", de: "Ballaststoffe" },
+  protein: { en: "Protein", de: "Protein" },
+  carbs: { en: "Carbs", de: "Kohlenhydrate" },
+  fat: { en: "Fat", de: "Fett" },
+  saturated_fat: { en: "Saturated fat", de: "Gesättigte Fettsäuren" },
+  sugar: { en: "Sugar", de: "Zucker" },
+  calories: { en: "Calories", de: "Kalorien" },
+  processed: { en: "Processed", de: "Verarbeitung" },
+  iron_mg: { en: "Iron", de: "Eisen" },
+  calcium_mg: { en: "Calcium", de: "Calcium" },
+  magnesium_mg: { en: "Magnesium", de: "Magnesium" },
+  zinc_mg: { en: "Zinc", de: "Zink" },
+  vitamin_c_mg: { en: "Vitamin C", de: "Vitamin C" },
+  vitamin_d_ug: { en: "Vitamin D", de: "Vitamin D" },
+  vitamin_b12_ug: { en: "Vitamin B12", de: "Vitamin B12" },
+  folate_ug: { en: "Folate", de: "Folat" },
+  potassium_mg: { en: "Potassium", de: "Kalium" },
+  iodine_ug: { en: "Iodine", de: "Jod" },
+};
+
+export function nutrientLabel(key: string, lang: Lang): string {
+  const entry = NUTRIENT_LABELS[key];
+  if (entry) return entry[lang];
+  // Fallback for an unmapped key: drop the unit suffix, de-underscore, capitalize.
+  const base = key.replace(/_(mg|ug|µg|g|kcal)$/i, "").replace(/_/g, " ");
+  return base.charAt(0).toUpperCase() + base.slice(1);
+}
+
+// R-LANG: the active language is the user's explicit stored choice if any,
+// otherwise the device locale when it's German or English, otherwise
+// English. `navigator.language` is e.g. "de", "de-DE", "en-GB" — we only
+// key off the primary subtag.
+function detectDefaultLanguage(): Lang {
+  const stored = localStorage.getItem(LANGUAGE_KEY);
+  if (stored === "en" || stored === "de") return stored;
+  const locale = (typeof navigator !== "undefined" ? navigator.language : "") || "";
+  return locale.toLowerCase().startsWith("de") ? "de" : "en";
+}
+
 // For the rare spot outside a component (native `confirm`/`alert`
 // dialogs in App.tsx, which fire from a plain event handler, not
 // render) that needs the current language without the `useLanguage`
-// hook — same localStorage read LanguageProvider itself uses below.
+// hook — same resolution the LanguageProvider itself uses below.
 export function getStoredLanguage(): Lang {
-  return (localStorage.getItem(LANGUAGE_KEY) as Lang | null) ?? "en";
+  return detectDefaultLanguage();
 }
 
 interface LanguageContextValue {
@@ -580,9 +736,7 @@ interface LanguageContextValue {
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguageState] = useState<Lang>(
-    () => (localStorage.getItem(LANGUAGE_KEY) as Lang | null) ?? "en",
-  );
+  const [language, setLanguageState] = useState<Lang>(detectDefaultLanguage);
 
   useEffect(() => {
     localStorage.setItem(LANGUAGE_KEY, language);
