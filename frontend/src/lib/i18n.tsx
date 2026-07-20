@@ -393,39 +393,6 @@ const STRINGS: Record<string, { en: string; de: string }> = {
   "upload.reviewButton": { en: "Review items →", de: "Artikel prüfen →" },
   "upload.progress": { en: "Processing {done} of {total}…", de: "Verarbeite {done} von {total}…" },
   "upload.multiDone": { en: "{ok} of {total} receipts processed", de: "{ok} von {total} Belegen verarbeitet" },
-  // E3-S6 data-sufficiency disclaimer
-  "upload.disclaimerTitle": { en: "How much data helps", de: "Wie viel Daten was bringen" },
-  "upload.disclaimerBody": {
-    en: "One receipt gives a first snapshot. A week of shopping sharpens your daily estimate; a few weeks makes trends and gaps reliable. The more receipts, the more confident the picture.",
-    de: "Ein Beleg liefert eine erste Momentaufnahme. Eine Woche Einkäufe schärft deine Tagesschätzung; einige Wochen machen Trends und Lücken belastbar. Je mehr Belege, desto sicherer das Bild.",
-  },
-
-  // Onboarding baseline upload (OnboardingUploadStep.tsx) — deliberately
-  // separate copy from the generic "upload" namespace above: this is the
-  // chat's continuation, not the standalone re-upload page.
-  "onboardingUpload.progressProfile": { en: "Profile", de: "Profil" },
-  "onboardingUpload.progressReceipt": { en: "Baseline receipt", de: "Baseline-Kassenbon" },
-  "onboardingUpload.badge": { en: "ALMOST THERE", de: "GLEICH GESCHAFFT" },
-  "onboardingUpload.titleLine1": { en: "One last thing —", de: "Eine letzte Sache —" },
-  "onboardingUpload.titleLine2": { en: "your baseline.", de: "deine Baseline." },
-  "onboardingUpload.greetingWithName": {
-    en: "Great, {name}! Upload as many receipts as you can now — a digital receipt from a supermarket loyalty app works best, or a clean, upright photo. Once you've logged 50 food items, you're through.",
-    de: "Perfekt, {name}! Lade jetzt so viele Kassenzettel wie möglich hoch — im Idealfall als digitalen Bon aus einer Supermarkt-Loyalitäts-App oder als saubere, gerade Fotos. Sobald du 50 Lebensmittel erfasst hast, geht's weiter.",
-  },
-  "onboardingUpload.greeting": {
-    en: "Upload as many receipts as you can now — a digital receipt from a supermarket loyalty app works best, or a clean, upright photo. Once you've logged 50 food items, you're through.",
-    de: "Lade jetzt so viele Kassenzettel wie möglich hoch — im Idealfall als digitalen Bon aus einer Supermarkt-Loyalitäts-App oder als saubere, gerade Fotos. Sobald du 50 Lebensmittel erfasst hast, geht's weiter.",
-  },
-  "onboardingUpload.greetingMore": {
-    en: "Great — keep going! Upload another receipt.",
-    de: "Weiter so! Lade noch einen Kassenzettel hoch.",
-  },
-  "onboardingUpload.itemProgressLabel": { en: "Baseline progress", de: "Baseline-Fortschritt" },
-  "onboardingUpload.itemProgressCount": {
-    en: "{count} of {target} food items",
-    de: "{count} von {target} Lebensmitteln",
-  },
-  "onboardingUpload.skip": { en: "I'll do this later", de: "Das mache ich später" },
 
   // Review step
   "review.step": { en: "Step 4 · Review", de: "Schritt 4 · Prüfen" },
@@ -442,6 +409,10 @@ const STRINGS: Record<string, { en: string; de: string }> = {
   "review.saving": { en: "Saving…", de: "Wird gespeichert…" },
   "review.cancel": { en: "Cancel", de: "Abbrechen" },
   "review.continueButton": { en: "Continue to profile →", de: "Weiter zum Profil →" },
+  "review.nextReceiptButton": { en: "Next receipt →", de: "Nächster Kassenbon →" },
+  "review.pageOf": { en: "Receipt {index} of {total}", de: "Kassenbon {index} von {total}" },
+  "review.unknownStore": { en: "Receipt", de: "Kassenbon" },
+  "review.receiptImageAlt": { en: "Uploaded receipt", de: "Hochgeladener Kassenbon" },
   "review.namePlaceholder": { en: "Name", de: "Name" },
   "review.quantityPlaceholder": { en: "Quantity", de: "Menge" },
   "review.unitPlaceholder": { en: "Unit", de: "Einheit" },
@@ -489,6 +460,15 @@ const STRINGS: Record<string, { en: string; de: string }> = {
   "results.receiptsCounter": { en: "receipts", de: "Kassenbons" },
   "results.itemsCounter": { en: "items", de: "Artikel" },
   "results.greetingFallback": { en: "Welcome back", de: "Willkommen zurück" },
+  // E1 baseline-upload gate: greyed-out placeholder shown instead of the
+  // health score / gaps / next cart until 50 food items are uploaded.
+  "results.gapsTitle": { en: "Current profile & gaps", de: "Aktuelles Profil & Lücken" },
+  "results.gapsLocked": {
+    en: "This unlocks once your baseline receipts are in — for now, here's what's needed.",
+    de: "Das schaltet sich frei, sobald deine Baseline-Kassenbons erfasst sind — hier siehst du, was noch fehlt.",
+  },
+  "results.gapsProgress": { en: "{count} of {target} food items uploaded", de: "{count} von {target} Lebensmitteln hochgeladen" },
+  "results.gapsUploadCta": { en: "Upload receipts", de: "Kassenzettel hochladen" },
   "results.reminderText": {
     en: "You haven't confirmed anything in {days} days — your estimates are getting less accurate.",
     de: "Du hast seit {days} Tagen nichts bestätigt — deine Schätzungen werden ungenauer.",
@@ -610,6 +590,7 @@ const STRINGS: Record<string, { en: string; de: string }> = {
     en: "Nothing here yet — upload a receipt to start building your pantry.",
     de: "Noch nichts hier — lade einen Kassenbon hoch, um dein Lager zu füllen.",
   },
+  "pantry.emptyUploadCta": { en: "Upload your first receipt", de: "Ersten Kassenbon hochladen" },
   "pantry.consumed": { en: "Ate it", de: "Gegessen" },
   "pantry.remove": { en: "No longer have it", de: "Nicht mehr vorhanden" },
   "pantry.quantityLabel": { en: "Quantity", de: "Menge" },

@@ -24,6 +24,21 @@ import { LanguageProvider, useLanguage, t, getStoredLanguage } from "@/lib/i18n"
 const RECEIPT_KEY = "nutriwise.receiptId";
 const CONSENT_KEY = "nutriwise.consent";
 
+// The localStorage value used to be a single receipt id string; now it's a
+// JSON array (E5: Review pages through every receipt from a batch upload,
+// not just the first). Reading a leftover plain string as a 1-item array
+// keeps an in-progress session from an older build working after reload.
+function loadStoredReceiptIds(): string[] {
+  const raw = localStorage.getItem(RECEIPT_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [raw];
+  } catch {
+    return [raw];
+  }
+}
+
 function App() {
   // E1: the app is gated on a Supabase auth session. Unauthenticated ->
   // AuthScreen (sign-up / login / age gate). Authenticated -> resolve the
@@ -34,21 +49,17 @@ function App() {
   const [bootstrapped, setBootstrapped] = useState(false);
 
   const [step, setStep] = useState<StepId>("onboarding");
-  const [receiptId, setReceiptId] = useState<string | null>(() =>
-    localStorage.getItem(RECEIPT_KEY),
-  );
+  const [receiptIds, setReceiptIds] = useState<string[]>(loadStoredReceiptIds);
   const [profileId, setProfileId] = useState<string | null>(null);
   // The incomplete profile to resume onboarding from (E1-S6), or null for
   // a fresh walk-through.
   const [resumeProfile, setResumeProfile] = useState<Profile | null>(null);
-  const [profileName, setProfileName] = useState<string | null>(null);
 
   // E1's baseline-upload gate: active from the moment onboarding's profile
   // step finishes until 50 food items have been uploaded. While active,
   // finishing a receipt's Review loops back to another upload instead of
   // continuing into the app (see handleOnboardingReviewContinue below).
   const [uploadGateActive, setUploadGateActive] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<ReceiptUploadProgress | null>(null);
 
   const [consented, setConsented] = useState<boolean>(
     () => localStorage.getItem(CONSENT_KEY) === "true",
@@ -72,12 +83,10 @@ function App() {
         setBootstrapped(false);
         setProfileId(null);
         setResumeProfile(null);
-        setProfileName(null);
-        setReceiptId(null);
+        setReceiptIds([]);
         localStorage.removeItem(RECEIPT_KEY);
         setNotifications([]);
         setUploadGateActive(false);
-        setUploadProgress(null);
       }
     });
     return () => sub.subscription.unsubscribe();
@@ -95,7 +104,6 @@ function App() {
         setBootstrapped(true);
         if (p && p.profile_complete) {
           setProfileId(p.profile_id);
-          setProfileName(p.name ?? null);
           setStep("results");
         } else if (p) {
           setProfileId(p.profile_id);
@@ -138,30 +146,25 @@ function App() {
     setConsented(true);
   }
 
-  function handleUploaded(id: string) {
-    setReceiptId(id);
-    localStorage.setItem(RECEIPT_KEY, id);
+  function handleUploaded(ids: string[]) {
+    setReceiptIds(ids);
+    localStorage.setItem(RECEIPT_KEY, JSON.stringify(ids));
     setStep("review");
   }
 
-  function handleProfileCreated(id: string, name: string | null) {
+  function handleProfileCreated(id: string) {
     setProfileId(id);
-    setProfileName(name);
     setResumeProfile(null);
     setUploadGateActive(true);
-    setUploadProgress(null);
-    void refreshUploadProgress();
     setStep("onboardingUpload");
   }
 
   // E1's baseline-upload gate: how many food items uploaded so far, vs.
   // the target that unlocks the rest of the app. Best-effort — a failed
-  // fetch just leaves the progress bar blank rather than blocking upload.
+  // fetch is treated as "not complete yet" rather than blocking upload.
   async function refreshUploadProgress(): Promise<ReceiptUploadProgress | null> {
     try {
-      const p = await getReceiptUploadProgress();
-      setUploadProgress(p);
-      return p;
+      return await getReceiptUploadProgress();
     } catch {
       return null;
     }
@@ -180,10 +183,6 @@ function App() {
     }
   }
 
-  function handleOnboardingSkip() {
-    setUploadGateActive(false);
-    setStep("pantry");
-  }
 
   // E12-S3 / FR-12.3: full GDPR erasure. One confirmed path (used by both
   // the footer and the profile screen): hard cascade-delete all personal
@@ -253,6 +252,14 @@ function App() {
         onDeleteData={handleDeleteAccount}
         canDeleteData={Boolean(session)}
         hasUnreadNotifications={notifications.some((n) => n.unread)}
+        // Lock down navigation (tab nav + the brand logo's link to
+        // Insights) only during the profile chat itself — there's no
+        // profile yet, so there's nowhere useful to jump to. From the
+        // baseline-upload step onward (still part of E1's 50-item gate),
+        // Pantry and Insights are real, reachable destinations; each
+        // shows its own gated/partial view until the target is reached
+        // (see PantryStep's empty state and ResultsStep's gapsLocked card).
+        restrictNav={step === "onboarding"}
       >
         {!consented ? (
           <ConsentBanner onAccept={handleConsent} />
@@ -272,17 +279,11 @@ function App() {
                 resumeProfile={resumeProfile}
                 resumeProfileId={profileId}
                 onProfileCreated={handleProfileCreated}
-                onSkip={() => setStep("pantry")}
               />
             ) : null}
 
             {step === "onboardingUpload" ? (
-              <OnboardingUploadStep
-                profileName={profileName}
-                itemProgress={uploadProgress}
-                onUploaded={handleUploaded}
-                onSkip={handleOnboardingSkip}
-              />
+              <OnboardingUploadStep onUploaded={handleUploaded} />
             ) : null}
 
             {step === "userProfile" ? (
@@ -298,13 +299,15 @@ function App() {
             ) : null}
 
             {step === "review" ? (
-              receiptId ? (
+              receiptIds.length > 0 ? (
                 <ReviewStep
-                  receiptId={receiptId}
+                  receiptIds={receiptIds}
                   onContinue={uploadGateActive ? handleOnboardingReviewContinue : () => setStep("pantry")}
                 />
               ) : (
-                <EmptyState onAction={() => setStep("pantry")} />
+                <EmptyState
+                  onAction={uploadGateActive ? () => setStep("onboardingUpload") : () => setStep("pantry")}
+                />
               )
             ) : null}
 

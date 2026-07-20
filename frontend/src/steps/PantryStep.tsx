@@ -221,7 +221,9 @@ type UploadMode = "image" | "text";
 function UploadSection({
   onUploaded,
 }: {
-  onUploaded: (receiptId: string) => void;
+  // Every successfully-parsed receipt from this upload (E5: Review pages
+  // through all of them, one at a time) — not just the first.
+  onUploaded: (receiptIds: string[]) => void;
 }) {
   const [mode, setMode] = useState<UploadMode>("image");
   const [dragOver, setDragOver] = useState(false);
@@ -229,28 +231,31 @@ function UploadSection({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<UploadReceiptResponse | null>(null);
+  const [okReceiptIds, setOkReceiptIds] = useState<string[]>([]);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [multiSummary, setMultiSummary] = useState<{ ok: number; total: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { t } = useLanguage();
 
   // E3-S1: each selected file is uploaded as its own receipt (sequential),
-  // so one bad file never sinks the batch.
+  // so one bad file never sinks the batch. The preview below shows the
+  // first that parsed; every one that parsed carries through to Review.
   async function handleFiles(files: File[]) {
     if (!files.length) return;
     setLoading(true);
     setError(null);
     setMultiSummary(null);
+    setOkReceiptIds([]);
     setProgress(files.length > 1 ? { done: 0, total: files.length } : null);
     try {
       const results = await uploadReceiptFiles(files, (done, total) =>
         setProgress(total > 1 ? { done, total } : null),
       );
-      const firstOk = results.find((r) => r.ok);
-      const okCount = results.filter((r) => r.ok).length;
-      if (firstOk?.response) {
-        setResult(firstOk.response);
-        if (results.length > 1) setMultiSummary({ ok: okCount, total: results.length });
+      const okResults = results.filter((r) => r.ok && r.response);
+      if (okResults.length > 0) {
+        setResult(okResults[0].response!);
+        setOkReceiptIds(okResults.map((r) => r.response!.receipt_id));
+        if (results.length > 1) setMultiSummary({ ok: okResults.length, total: results.length });
       } else {
         const failed = results.find((r) => !r.ok);
         setError(t(failed?.errorKey ?? "upload.uploadFailed"));
@@ -265,9 +270,11 @@ function UploadSection({
     if (!pastedText.trim()) return;
     setLoading(true);
     setError(null);
+    setOkReceiptIds([]);
     try {
       const res = await uploadReceiptText(pastedText);
       setResult(res);
+      setOkReceiptIds([res.receipt_id]);
     } catch (e) {
       setError(e instanceof ApiError ? t(receiptErrorKey(e)) : t("upload.uploadFailed"));
     } finally {
@@ -287,6 +294,7 @@ function UploadSection({
             onClick={() => {
               setMode(m);
               setResult(null);
+              setOkReceiptIds([]);
               setError(null);
             }}
             className={cn(
@@ -297,13 +305,6 @@ function UploadSection({
             {m === "image" ? t("upload.tabPhoto") : t("upload.tabText")}
           </button>
         ))}
-      </div>
-
-      <div className="rounded-2xl bg-zinc-50 px-4 py-3 ring-1 ring-black/5">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-ink/40">
-          {t("upload.disclaimerTitle")}
-        </p>
-        <p className="mt-1 text-xs text-ink/60">{t("upload.disclaimerBody")}</p>
       </div>
 
       {mode === "image" ? (
@@ -417,7 +418,7 @@ function UploadSection({
               </li>
             ))}
           </ul>
-          <PrimaryButton onClick={() => onUploaded(result.receipt_id)}>
+          <PrimaryButton onClick={() => onUploaded(okReceiptIds)}>
             {t("upload.reviewButton")}
           </PrimaryButton>
         </div>
@@ -502,7 +503,7 @@ export function PantryStep({
   onNavigate,
 }: {
   profileId: string | null;
-  onUploaded: (receiptId: string) => void;
+  onUploaded: (receiptIds: string[]) => void;
   // Cross-link to Insights — adding/removing stock changes your gaps,
   // so it's worth a direct way back without hunting for the nav tab.
   onNavigate?: (step: StepId) => void;
@@ -594,8 +595,8 @@ export function PantryStep({
       <EatenFeedbackCard surface="A" />
 
       <UploadSection
-        onUploaded={(receiptId) => {
-          onUploaded(receiptId);
+        onUploaded={(receiptIds) => {
+          onUploaded(receiptIds);
           // The uploaded items land in the pantry once the review step
           // (App.tsx routes there next) confirms them — refresh here too
           // so coming back to Pantry directly (browser back) isn't stale.
@@ -608,8 +609,13 @@ export function PantryStep({
       ) : null}
 
       {items && items.length === 0 ? (
-        <Card>
+        <Card className="space-y-3">
           <p className="text-sm text-ink/60">{t("pantry.empty")}</p>
+          {onNavigate ? (
+            <PrimaryButton type="button" className="w-auto px-6" onClick={() => onNavigate("onboardingUpload")}>
+              {t("pantry.emptyUploadCta")}
+            </PrimaryButton>
+          ) : null}
         </Card>
       ) : null}
 

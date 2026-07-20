@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { SectionLabel, Card, inputCls } from "@/components/AppShell";
+import { SectionLabel, Card, PrimaryButton, inputCls } from "@/components/AppShell";
 import type { StepId } from "@/components/AppShell";
 import { cn } from "@/lib/utils";
 import { useLanguage, nutrientLabel } from "@/lib/i18n";
@@ -10,6 +10,7 @@ import {
   getPantry,
   getAnalysis,
   getRecommendations,
+  getReceiptUploadProgress,
   submitFeedback,
   ApiError,
 } from "@/lib/api";
@@ -17,6 +18,7 @@ import { AnalysisCard } from "@/steps/AnalysisCard";
 import { NextCartCard as StructuredNextCartCard } from "@/steps/NextCartCard";
 import { Level2Card } from "@/steps/Level2Card";
 import { EatenFeedbackCard } from "@/steps/EatenFeedbackCard";
+import { TargetsCard } from "@/components/TargetsCard";
 import type {
   AbsoluteGap,
   Conflict,
@@ -24,9 +26,11 @@ import type {
   FeedbackResponseValue,
   Gap,
   HealthScore,
+  IdealProfile,
   NextCartRecommendation,
   NutritionSnapshot,
   NutritionAnalysis,
+  ReceiptUploadProgress,
   StructuredNextCart,
   ProgressReport,
 } from "@/types/api";
@@ -441,6 +445,50 @@ function ProgressCard({ progress }: { progress: ProgressReport }) {
   );
 }
 
+// E1's baseline-upload gate: a greyed-out placeholder for the health
+// score / gaps / next-cart section, standing in for it until enough
+// receipts are in — the progress bar is the same "{count}/{target} food
+// items" the onboarding upload step shows, so it reads as one continuous
+// countdown rather than two different mechanisms.
+function GatedGapsCard({
+  progress,
+  onNavigate,
+}: {
+  progress: ReceiptUploadProgress;
+  onNavigate?: (step: StepId) => void;
+}) {
+  const { t } = useLanguage();
+  const pct = Math.min(100, Math.round((progress.count / progress.target) * 100));
+  return (
+    <Card className="space-y-3">
+      {/* Bug fix: this heading used to inherit the card's opacity-50, so
+          it was just as faded as the locked content below it and hard to
+          read. The heading now stays full-strength; only the body/bar/
+          progress line are muted, so it's clear what's greyed out and
+          what isn't. */}
+      <h2 className="text-sm font-semibold tracking-tight text-ink">{t("results.gapsTitle")}</h2>
+      <p className="text-sm text-ink/50">{t("results.gapsLocked")}</p>
+      <div className="h-2 overflow-hidden rounded-full bg-zinc-100">
+        <div className="h-full rounded-full bg-ink/30" style={{ width: `${pct}%` }} />
+      </div>
+      <p className="text-xs text-ink/50">
+        {t("results.gapsProgress")
+          .replace("{count}", String(progress.count))
+          .replace("{target}", String(progress.target))}
+      </p>
+      {onNavigate ? (
+        <PrimaryButton
+          type="button"
+          className="w-auto px-6"
+          onClick={() => onNavigate("onboardingUpload")}
+        >
+          {t("results.gapsUploadCta")}
+        </PrimaryButton>
+      ) : null}
+    </Card>
+  );
+}
+
 const FEEDBACK_OPTIONS: readonly FeedbackResponseValue[] = ["yes", "maybe", "no"];
 
 function FeedbackWidget({ recommendationId }: { recommendationId: string }) {
@@ -549,6 +597,12 @@ export function ResultsStep({
   // than a dead end.
   const [noData, setNoData] = useState(false);
   const [loading, setLoading] = useState(true);
+  // E1's baseline-upload gate: the profile's calculated targets are always
+  // shown once they exist, but the rest of the page (health score, gaps,
+  // next cart) only makes sense once there's enough data behind it — see
+  // the gated render branch below.
+  const [idealProfile, setIdealProfile] = useState<IdealProfile | null>(null);
+  const [itemProgress, setItemProgress] = useState<ReceiptUploadProgress | null>(null);
   // Epic 14.1: collapsed by default so the page reads as a short "here's
   // where you stand" summary first, not a wall of cards.
   const [showDetails, setShowDetails] = useState(false);
@@ -562,10 +616,42 @@ export function ResultsStep({
     setError(null);
     setNoData(false);
 
+    // Best-effort: a stale/invalid profileId, or a failed progress fetch,
+    // shouldn't break the rest of the page — profile falls back to the
+    // name-less greeting, and a failed progress check just skips the gate
+    // (fails open to the normal page) rather than getting stuck greyed out.
+    const [profileResult, progressResult] = await Promise.allSettled([
+      profileId ? getProfile(profileId) : Promise.resolve(null),
+      getReceiptUploadProgress(),
+    ]);
+    const profile = profileResult.status === "fulfilled" ? profileResult.value : null;
+    const progress = progressResult.status === "fulfilled" ? progressResult.value : null;
+    setIdealProfile(profile?.ideal_profile ?? null);
+    setItemProgress(progress);
+    if (profile) {
+      setProfileName(profile.name ?? null);
+      // E9 / R-L2TRIG: only invite when the user hasn't decided consent
+      // yet (null/undefined) — once granted or declined, never again.
+      setLevel2Decided(profile.consent_level2 !== null && profile.consent_level2 !== undefined);
+    }
+
+    // E1's baseline-upload gate: below the 50-item target, the rest of
+    // the analysis (health score, gaps, next cart) would be computed from
+    // too little data to mean anything — show only the calculated targets
+    // + a greyed-out progress indicator instead of fetching any of it.
+    if (progress && !progress.complete) {
+      setSnapshot(null);
+      setAnalysis(null);
+      setStructuredCart(null);
+      setRecommendation(null);
+      setDaysSinceLastConfirmation(null);
+      setLoading(false);
+      return;
+    }
+
     // allSettled, not all — a "no receipts yet" 409 on snapshot/next-cart
     // shouldn't also block the independent pantry fetch (the reminder
-    // banner should still work) or the profile name fetch (the greeting
-    // should still be personalized) below.
+    // banner should still work).
     const [snapResult, recResult, pantryResult, analysisResult, cartResult] = await Promise.allSettled([
       getNutritionSnapshot(profileId ?? undefined),
       getNextCart(profileId ?? undefined),
@@ -593,19 +679,6 @@ export function ResultsStep({
       setError(recResult.reason instanceof ApiError ? recResult.reason.message : t("results.loadFailed"));
     }
 
-    if (profileId) {
-      // Best-effort: a stale/invalid profileId shouldn't break the
-      // rest of the page, it just falls back to the name-less greeting.
-      getProfile(profileId)
-        .then((p) => {
-          setProfileName(p.name ?? null);
-          // E9 / R-L2TRIG: only invite when the user hasn't decided consent
-          // yet (null/undefined) — once granted or declined, never again.
-          setLevel2Decided(p.consent_level2 !== null && p.consent_level2 !== undefined);
-        })
-        .catch(() => setProfileName(null));
-    }
-
     setLoading(false);
   }
 
@@ -620,6 +693,11 @@ export function ResultsStep({
   const greeting = profileName
     ? `Hi ${profileName} 👋`
     : `${t("results.greetingFallback")} 👋`;
+
+  // E1's baseline-upload gate: below the 50-item target, show only the
+  // calculated targets + a greyed-out progress placeholder instead of the
+  // full analysis (which `load()` didn't even fetch in this state).
+  const gated = itemProgress !== null && !itemProgress.complete;
 
   return (
     <section className="space-y-8 px-6 pb-16">
@@ -679,6 +757,17 @@ export function ResultsStep({
         </div>
       </header>
 
+      {loading ? <p className="text-sm text-ink/50">{t("results.loading")}</p> : null}
+
+      {!loading && gated && itemProgress ? (
+        <>
+          <TargetsCard ideal={idealProfile} />
+          <GatedGapsCard progress={itemProgress} onNavigate={onNavigate} />
+        </>
+      ) : null}
+
+      {!loading && !gated ? (
+        <>
       {/* Promoted from DashboardStep.tsx's mockup: the inactivity nudge
           now lives on the merged home page, pointing at the Diary
           ("Tagebuch") page where confirming consumption actually happens. */}
@@ -737,8 +826,6 @@ export function ResultsStep({
           </div>
         </div>
       ) : null}
-
-      {loading ? <p className="text-sm text-ink/50">{t("results.loading")}</p> : null}
 
       {error ? (
         <div className="rounded-2xl bg-red-50 px-5 py-4 text-sm text-red-700 ring-1 ring-red-200">
@@ -909,6 +996,8 @@ export function ResultsStep({
               )}
             </>
           ) : null}
+        </>
+      ) : null}
         </>
       ) : null}
     </section>

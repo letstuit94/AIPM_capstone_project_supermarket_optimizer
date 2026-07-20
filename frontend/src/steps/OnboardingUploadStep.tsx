@@ -3,7 +3,7 @@ import { Card, PrimaryButton, SectionLabel, inputCls } from "@/components/AppShe
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/lib/i18n";
 import { uploadReceiptFiles, uploadReceiptText, receiptErrorKey, ApiError } from "@/lib/api";
-import type { ReceiptUploadProgress, UploadReceiptResponse } from "@/types/api";
+import type { UploadReceiptResponse } from "@/types/api";
 
 const ACCEPT = "image/jpeg,image/png,image/webp,application/pdf";
 
@@ -13,26 +13,22 @@ type Mode = "image" | "text";
 // general "add another receipt" flow (now embedded in PantryStep.tsx's
 // "Lager" page, reachable any time from the nav). Deliberately a
 // separate component: different framing (this IS the baseline, not a
-// re-upload), different visual language (matches ChatOnboardingStep's
-// avatar/serif-headline hero instead of the plain in-app SectionLabel
-// header), and it's the one place in the app where completing it always
-// means "continue the onboarding journey", never "revisit an existing one".
+// re-upload), and it's the one place in the app where completing it
+// always means "continue the onboarding journey", never "revisit an
+// existing one". Plain upload card, no chat styling — the chat lives in
+// ChatOnboardingStep.tsx; this step is a normal form.
 export function OnboardingUploadStep({
-  profileName,
-  itemProgress,
   onUploaded,
-  onSkip,
 }: {
-  profileName?: string | null;
-  // E1's baseline-upload gate: cumulative food items uploaded so far vs.
-  // the target that unlocks the rest of the app. Owned by App.tsx (it's
-  // also what decides, after each Review, whether to loop back here or
-  // continue) — null only for the brief moment before the first fetch
-  // resolves. Named distinctly from the per-file upload `progress` state
-  // below (that one tracks "processing 2 of 5 files", not food items).
-  itemProgress: ReceiptUploadProgress | null;
-  onUploaded: (receiptId: string) => void;
-  onSkip: () => void;
+  // Every successfully-parsed receipt from this upload (E5: Review pages
+  // through all of them, one at a time) — not just the first.
+  onUploaded: (receiptIds: string[]) => void;
+  // Deliberately no `onSkip` here (bug fix): a "do this later" escape
+  // hatch let users leave before the 50-item target, and the nav/logo
+  // leak (AppShell.tsx) meant they could land straight on Insights with
+  // as few as 15 items uploaded. This step and Review (while the gate is
+  // active) are now the only two screens reachable until the target is
+  // met — see App.tsx's `restrictNav` and `handleOnboardingReviewContinue`.
 }) {
   const [mode, setMode] = useState<Mode>("image");
   const [dragOver, setDragOver] = useState(false);
@@ -40,29 +36,31 @@ export function OnboardingUploadStep({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<UploadReceiptResponse | null>(null);
+  const [okReceiptIds, setOkReceiptIds] = useState<string[]>([]);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [multiSummary, setMultiSummary] = useState<{ ok: number; total: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { t } = useLanguage();
 
-  // E3-S1: each selected file is uploaded as its own receipt. We proceed
-  // with the first that parsed; any that failed are summarized, never
-  // silently dropped.
+  // E3-S1: each selected file is uploaded as its own receipt. The preview
+  // below shows the first that parsed; every one that parsed (not just
+  // the first) carries through to Review once the user continues.
   async function handleFiles(files: File[]) {
     if (!files.length) return;
     setLoading(true);
     setError(null);
     setMultiSummary(null);
+    setOkReceiptIds([]);
     setProgress(files.length > 1 ? { done: 0, total: files.length } : null);
     try {
       const results = await uploadReceiptFiles(files, (done, total) =>
         setProgress(total > 1 ? { done, total } : null),
       );
-      const firstOk = results.find((r) => r.ok);
-      const okCount = results.filter((r) => r.ok).length;
-      if (firstOk?.response) {
-        setResult(firstOk.response);
-        if (results.length > 1) setMultiSummary({ ok: okCount, total: results.length });
+      const okResults = results.filter((r) => r.ok && r.response);
+      if (okResults.length > 0) {
+        setResult(okResults[0].response!);
+        setOkReceiptIds(okResults.map((r) => r.response!.receipt_id));
+        if (results.length > 1) setMultiSummary({ ok: okResults.length, total: results.length });
       } else {
         const failed = results.find((r) => !r.ok);
         setError(t(failed?.errorKey ?? "upload.uploadFailed"));
@@ -77,9 +75,11 @@ export function OnboardingUploadStep({
     if (!pastedText.trim()) return;
     setLoading(true);
     setError(null);
+    setOkReceiptIds([]);
     try {
       const res = await uploadReceiptText(pastedText);
       setResult(res);
+      setOkReceiptIds([res.receipt_id]);
     } catch (e) {
       setError(e instanceof ApiError ? t(receiptErrorKey(e)) : t("upload.uploadFailed"));
     } finally {
@@ -87,75 +87,9 @@ export function OnboardingUploadStep({
     }
   }
 
-  // First visit (nothing uploaded yet) gets the name-aware intro; every
-  // subsequent loop back here (still under target) gets the shorter
-  // "keep going" nudge instead of repeating the same greeting.
-  const greeting =
-    itemProgress && itemProgress.count > 0
-      ? t("onboardingUpload.greetingMore")
-      : profileName
-        ? t("onboardingUpload.greetingWithName").replace("{name}", profileName)
-        : t("onboardingUpload.greeting");
-
-  const itemPct = itemProgress
-    ? Math.min(100, Math.round((itemProgress.count / itemProgress.target) * 100))
-    : 0;
-
   return (
     <section className="space-y-5 px-6 pb-16">
-      <header className="space-y-1.5 text-center">
-        <span className="inline-block rounded-full bg-zinc-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-ink/50">
-          {t("onboardingUpload.badge")}
-        </span>
-        <h1 className="mx-auto max-w-xl text-balance text-2xl font-bold leading-tight tracking-tight text-ink sm:text-3xl">
-          {t("onboardingUpload.titleLine1")} <span className="text-accent">{t("onboardingUpload.titleLine2")}</span>
-        </h1>
-      </header>
-
-      {/* Two-stage progress, continuing the chat's own progress bar
-          (ChatOnboardingStep.tsx) — makes the end-to-end journey
-          (profile -> baseline receipt) visually explicit as one flow. */}
-      <div className="mx-auto flex max-w-md items-center gap-2 text-[11px] font-medium uppercase tracking-widest text-ink/40">
-        <span className="flex items-center gap-1.5 text-accent">
-          <span className="flex size-4 items-center justify-center rounded-full bg-accent text-[9px] text-white">✓</span>
-          {t("onboardingUpload.progressProfile")}
-        </span>
-        <span className="h-px flex-1 bg-accent" />
-        <span className="flex items-center gap-1.5 text-ink">
-          <span className="flex size-4 items-center justify-center rounded-full bg-ink text-[9px] text-canvas">2</span>
-          {t("onboardingUpload.progressReceipt")}
-        </span>
-      </div>
-
-      {/* E1's baseline-upload gate: keep uploading until 50 food items are
-          logged, across as many receipts as it takes. */}
-      {itemProgress ? (
-        <div className="mx-auto max-w-md space-y-1.5">
-          <div className="flex items-center justify-between text-[11px] font-medium uppercase tracking-widest text-ink/40">
-            <span>{t("onboardingUpload.itemProgressLabel")}</span>
-            <span>
-              {t("onboardingUpload.itemProgressCount")
-                .replace("{count}", String(itemProgress.count))
-                .replace("{target}", String(itemProgress.target))}
-            </span>
-          </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
-            <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${itemPct}%` }} />
-          </div>
-        </div>
-      ) : null}
-
       <Card className="space-y-4">
-        <div className="flex items-start gap-2">
-          <span
-            aria-hidden
-            className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent text-sm ring-2 ring-white"
-          >
-            🌱
-          </span>
-          <p className="max-w-[46ch] rounded-2xl bg-zinc-100 px-4 py-2.5 text-sm text-ink">{greeting}</p>
-        </div>
-
         <div className="flex gap-2 rounded-full bg-surface p-1 ring-1 ring-black/5 w-fit">
           {(["image", "text"] as const).map((m) => (
             <button
@@ -164,6 +98,7 @@ export function OnboardingUploadStep({
               onClick={() => {
                 setMode(m);
                 setResult(null);
+                setOkReceiptIds([]);
                 setError(null);
               }}
               className={cn(
@@ -174,13 +109,6 @@ export function OnboardingUploadStep({
               {m === "image" ? t("upload.tabPhoto") : t("upload.tabText")}
             </button>
           ))}
-        </div>
-
-        <div className="rounded-2xl bg-zinc-50 px-4 py-3 ring-1 ring-black/5">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-ink/40">
-            {t("upload.disclaimerTitle")}
-          </p>
-          <p className="mt-1 text-xs text-ink/60">{t("upload.disclaimerBody")}</p>
         </div>
 
         {mode === "image" ? (
@@ -295,20 +223,12 @@ export function OnboardingUploadStep({
                 </li>
               ))}
             </ul>
-            <PrimaryButton onClick={() => onUploaded(result.receipt_id)}>
+            <PrimaryButton onClick={() => onUploaded(okReceiptIds)}>
               {t("upload.reviewButton")}
             </PrimaryButton>
           </div>
         ) : null}
       </Card>
-
-      <button
-        type="button"
-        onClick={onSkip}
-        className="block w-full text-center text-xs font-medium tracking-tight text-ink/50 hover:text-ink"
-      >
-        {t("onboardingUpload.skip")}
-      </button>
     </section>
   );
 }
