@@ -23,14 +23,18 @@ eval reports the CURRENT production pipeline (fix included). Baseline back then
 was 61.8% mean recall; with the fix it is ~93%.
 
 Usage:
-    .venv/bin/python3 ml/ocr_eval.py
+    .venv/bin/python3 ml/ocr_eval.py                 # report only (default)
+    .venv/bin/python3 ml/ocr_eval.py --min-recall 0.80   # CI guard: exit 1 if
+        # mean recall drops below the floor (used by .github/workflows/ocr-recall.yml)
 Outputs:
     ml/ocr_eval_results.json   (structured per-file results)
     ml/ocr_raw_text/<file>.txt (raw OCR dump per file, for eyeballing)
 """
 
+import argparse
 import importlib.util
 import json
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -80,7 +84,7 @@ def best_score(needle: str, haystack: str) -> float:
     return best
 
 
-def main():
+def main(min_recall=None):
     extractor = load_extractor()
     labels = json.load(open(LABELS, encoding="utf-8"))
 
@@ -143,6 +147,21 @@ def main():
                "mean_recall": mean_recall, "low_recall_files": low, "files": results},
               open(OUT, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 
+    # Regression gate (CI). Without --min-recall this is a no-op, so local /
+    # exploratory runs keep behaving as a pure report.
+    if min_recall is not None and mean_recall < min_recall:
+        print(f"\n::error::Mean OCR recall {mean_recall:.1%} is below the "
+              f"{min_recall:.0%} floor — an OCR regression. Inspect the LOW "
+              f"receipts' dumps in {RAW_DIR.relative_to(ROOT)}/.")
+        return 1
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--min-recall", type=float, default=None,
+        help="Fail (exit 1) if mean item recall drops below this 0..1 floor. "
+             "Omit for a plain report.")
+    args = parser.parse_args()
+    sys.exit(main(min_recall=args.min_recall))
