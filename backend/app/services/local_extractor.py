@@ -84,6 +84,17 @@ def _preprocess(pil_img: Image.Image, photo: bool) -> Image.Image:
     return g
 
 
+def _mean_conf(img: Image.Image) -> float:
+    """Mean per-word OCR confidence for an image (ignores empty tokens and
+    Tesseract's -1 non-text markers). Correctly-oriented text scores markedly
+    higher than a rotated page, so this is the signal we pick orientation by."""
+    d = pytesseract.image_to_data(img, lang=_OCR_LANG, config=_OCR_CONFIG,
+                                  output_type=pytesseract.Output.DICT)
+    confs = [int(c) for c, t in zip(d["conf"], d["text"])
+             if str(c) != "-1" and t.strip()]
+    return sum(confs) / len(confs) if confs else 0.0
+
+
 def _ocr(pil_img: Image.Image, photo: bool) -> str:
     if not _tesseract_available():
         raise UnreadableReceipt(
@@ -91,8 +102,25 @@ def _ocr(pil_img: Image.Image, photo: bool) -> str:
             "image receipts cannot be read. Install tesseract-ocr + "
             "tesseract-ocr-deu (see Dockerfile)."
         )
-    return pytesseract.image_to_string(_preprocess(pil_img, photo),
-                                       lang=_OCR_LANG, config=_OCR_CONFIG)
+    prepped = _preprocess(pil_img, photo)
+
+    # Confidence-based 90° orientation recovery. Phone photos of receipts are
+    # often landscape with a *normal* (or missing) EXIF orientation tag, so
+    # exif_transpose leaves them rotated and OCR returns pure noise. Tesseract's
+    # OSD is unreliable on faint thermal print, so we brute-force the four 90°
+    # orientations and keep the one with the highest mean word confidence.
+    # Photos only — flat app exports / rendered PDFs are already upright and
+    # skipping the search keeps them at a single OCR pass.
+    if photo:
+        best_img, best_conf = prepped, _mean_conf(prepped)
+        for deg in (90, 180, 270):
+            cand = prepped.rotate(deg, expand=True)
+            conf = _mean_conf(cand)
+            if conf > best_conf:
+                best_conf, best_img = conf, cand
+        prepped = best_img
+
+    return pytesseract.image_to_string(prepped, lang=_OCR_LANG, config=_OCR_CONFIG)
 
 
 def _pdf_text(file_bytes: bytes) -> str:
