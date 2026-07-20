@@ -66,7 +66,6 @@ export function AnalysisCard({ analysis }: { analysis: NutritionAnalysis }) {
   }
 
   const scored = analysis.bars.filter((b) => b.in_score);
-  const microBars = analysis.bars.filter((b) => b.weight === 0 && b.kind === "target");
   const ceilingBars = analysis.bars.filter((b) => b.kind === "ceiling");
   const band = analysis.confidence.band ?? "low";
 
@@ -99,13 +98,6 @@ export function AnalysisCard({ analysis }: { analysis: NutritionAnalysis }) {
           {ceilingBars.map((b) => <Bar key={b.nutrient} bar={b} />)}
         </ul>
       </div>
-
-      {microBars.length ? (
-        <div className="space-y-2">
-          <p className="text-xs font-medium uppercase tracking-widest text-ink/40">{t("analysis.micros")}</p>
-          <ul className="space-y-3">{microBars.map((b) => <Bar key={b.nutrient} bar={b} />)}</ul>
-        </div>
-      ) : null}
 
       <div className="space-y-2">
         <p className="text-xs font-medium uppercase tracking-widest text-ink/40">{t("analysis.grouping")}</p>

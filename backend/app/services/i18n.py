@@ -209,6 +209,37 @@ _MESSAGES = {
                "~{target:.0f} kcal/Tag. Weniger energiedichte Snacks oder Getränke "
                "könnten helfen."),
     },
+    "abs.fat_low": {
+        "en": ("You're getting ~{estimate:.0f} g fat/day, noticeably below your "
+               "~{target:.0f} g/day target. A drizzle of olive oil, nuts or fattier "
+               "fish would help close the gap."),
+        "de": ("Du nimmst ~{estimate:.0f} g Fett/Tag auf, deutlich unter deinem Ziel "
+               "von ~{target:.0f} g/Tag. Etwas Olivenöl, Nüsse oder fettreicherer Fisch "
+               "würden die Lücke schließen."),
+    },
+    "abs.fat_high": {
+        "en": ("You're getting ~{estimate:.0f} g fat/day, noticeably above your "
+               "~{target:.0f} g/day target. Leaner cuts or less fried food could help."),
+        "de": ("Du nimmst ~{estimate:.0f} g Fett/Tag auf, deutlich über deinem Ziel von "
+               "~{target:.0f} g/Tag. Magerere Fleischstücke oder weniger Frittiertes "
+               "könnten helfen."),
+    },
+    "abs.carbs_low": {
+        "en": ("You're getting ~{estimate:.0f} g carbs/day, noticeably below your "
+               "~{target:.0f} g/day target. If that's not intentional (e.g. a "
+               "low-carb goal), whole grains or fruit would help close the gap."),
+        "de": ("Du nimmst ~{estimate:.0f} g Kohlenhydrate/Tag auf, deutlich unter "
+               "deinem Ziel von ~{target:.0f} g/Tag. Falls das nicht beabsichtigt ist "
+               "(z. B. Low-Carb-Ziel), würden Vollkorn oder Obst die Lücke schließen."),
+    },
+    "abs.carbs_high": {
+        "en": ("You're getting ~{estimate:.0f} g carbs/day, noticeably above your "
+               "~{target:.0f} g/day target. Swapping some refined carbs for protein "
+               "or vegetables could help."),
+        "de": ("Du nimmst ~{estimate:.0f} g Kohlenhydrate/Tag auf, deutlich über "
+               "deinem Ziel von ~{target:.0f} g/Tag. Weniger raffinierte "
+               "Kohlenhydrate zugunsten von Protein oder Gemüse könnten helfen."),
+    },
 
     # recommender.py (legacy Next Cart)
     "rec.pantry_expired": {

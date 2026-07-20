@@ -7,10 +7,20 @@ import {
   consumePantryItem,
   logManualConsumption,
   getConsumptionLogForDate,
+  getPantryCoverage,
+  markDayAway,
+  unmarkDayAway,
+  logMealsOutside,
   ApiError,
 } from "@/lib/api";
 import type { PantryItem, ConsumptionLogEntry } from "@/types/api";
 import { CATEGORY_ICON } from "@/steps/PantryStep";
+
+// Epic 15.5.2: reserved pseudo-item name for "I ate N meals outside my
+// tracked pantry today" — must match backend services/pantry.py's
+// OUTSIDE_MEAL_SENTINEL exactly, since it's rendered specially below
+// rather than as a literal food name.
+const OUTSIDE_MEAL_SENTINEL = "__ate_out__";
 
 // "Tagebuch" — menu restructure: split out of the old combined Pantry
 // page. This is the day-by-day "what did I actually eat" flow;
@@ -228,12 +238,96 @@ function DayLog({ entries }: { entries: ConsumptionLogEntry[] }) {
     <Card className="space-y-2">
       <SectionLabel>{t("diary.dayLogTitle")}</SectionLabel>
       <ul className="space-y-1 text-sm text-ink/70">
-        {entries.map((entry) => (
-          <li key={entry.id}>
-            · {entry.normalized_name} ({entry.quantity_consumed})
-          </li>
-        ))}
+        {entries.map((entry) =>
+          entry.normalized_name === OUTSIDE_MEAL_SENTINEL ? (
+            <li key={entry.id}>· {t("diary.ateOutEntry").replace("{count}", String(entry.quantity_consumed))}</li>
+          ) : (
+            <li key={entry.id}>
+              · {entry.normalized_name} ({entry.quantity_consumed})
+            </li>
+          ),
+        )}
       </ul>
+    </Card>
+  );
+}
+
+// Epic 15.1.4: mark the currently-viewed day away instead of logging
+// food for it — excludes it from weekly/trend targets entirely rather
+// than reading a day with nothing logged as a deficit.
+function AwayToggle({
+  away,
+  onToggle,
+}: {
+  away: boolean;
+  onToggle: () => Promise<void>;
+}) {
+  const { t } = useLanguage();
+  const [busy, setBusy] = useState(false);
+
+  async function handleClick() {
+    setBusy(true);
+    try {
+      await onToggle();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={busy}
+        className={
+          away
+            ? "rounded-full bg-ink px-4 py-2 text-xs font-medium tracking-tight text-canvas disabled:opacity-40"
+            : "rounded-full bg-zinc-100 px-4 py-2 text-xs font-medium tracking-tight text-ink ring-1 ring-black/5 hover:bg-zinc-200 disabled:opacity-40"
+        }
+      >
+        {away ? t("diary.awayUndo") : t("diary.away")}
+      </button>
+      <p className="text-xs text-ink/40">{away ? t("diary.awaySet") : t("diary.awayExplainer")}</p>
+    </div>
+  );
+}
+
+// Epic 15.5.2: one tap per meal eaten outside the tracked pantry that day.
+function AteOutCard({
+  count,
+  onLog,
+}: {
+  count: number;
+  onLog: () => Promise<void>;
+}) {
+  const { t } = useLanguage();
+  const [busy, setBusy] = useState(false);
+
+  async function handleClick() {
+    setBusy(true);
+    try {
+      await onLog();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="space-y-3">
+      <SectionLabel>{t("diary.ateOutTitle")}</SectionLabel>
+      <p className="text-xs text-ink/50">{t("diary.ateOutBody")}</p>
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={busy}
+        className="rounded-full bg-zinc-100 px-4 py-2 text-xs font-medium tracking-tight text-ink ring-1 ring-black/5 hover:bg-zinc-200 disabled:opacity-40"
+      >
+        {t("diary.ateOutButton")}
+      </button>
+      {count > 0 ? (
+        <p className="text-xs text-ink/50">{t("diary.ateOutLogged").replace("{count}", String(count))}</p>
+      ) : null}
     </Card>
   );
 }
@@ -249,6 +343,7 @@ export function DiaryStep({
   const [items, setItems] = useState<PantryItem[] | null>(null);
   const [selectedDate, setSelectedDate] = useState(todayIso());
   const [logEntries, setLogEntries] = useState<ConsumptionLogEntry[]>([]);
+  const [awayDates, setAwayDates] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const { t } = useLanguage();
 
@@ -270,9 +365,39 @@ export function DiaryStep({
     }
   }
 
+  // Epic 15.1: which navigable days (up to MAX_DAYS_BACK) are marked
+  // away — covers the whole range DateNav can reach in one call.
+  async function loadCoverage() {
+    try {
+      const res = await getPantryCoverage(MAX_DAYS_BACK + 1);
+      setAwayDates(new Set(res.away));
+    } catch {
+      // Non-critical for the rest of the page — the away toggle just
+      // won't reflect prior state until the next successful load.
+    }
+  }
+
   async function loadAll() {
     setError(null);
-    await Promise.all([loadPantry(), loadLog(selectedDate)]);
+    await Promise.all([loadPantry(), loadLog(selectedDate), loadCoverage()]);
+  }
+
+  async function handleToggleAway() {
+    if (awayDates.has(selectedDate)) {
+      await unmarkDayAway(selectedDate);
+    } else {
+      await markDayAway(selectedDate);
+    }
+    await loadCoverage();
+  }
+
+  const ateOutCount = logEntries
+    .filter((e) => e.normalized_name === OUTSIDE_MEAL_SENTINEL)
+    .reduce((sum, e) => sum + e.quantity_consumed, 0);
+
+  async function handleLogAteOut() {
+    await logMealsOutside(1, consumedAtFor(selectedDate));
+    await loadLog(selectedDate);
   }
 
   useEffect(() => {
@@ -326,7 +451,11 @@ export function DiaryStep({
 
       <DateNav date={selectedDate} onChange={setSelectedDate} />
 
+      <AwayToggle away={awayDates.has(selectedDate)} onToggle={handleToggleAway} />
+
       <DayLog entries={logEntries} />
+
+      {!awayDates.has(selectedDate) ? <AteOutCard count={ateOutCount} onLog={handleLogAteOut} /> : null}
 
       <div className="space-y-2">
         <SectionLabel>{t("diary.pickFromPantryTitle")}</SectionLabel>

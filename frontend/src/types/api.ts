@@ -596,3 +596,68 @@ export interface ConsumptionFeedbackResult {
   // Freshly recomputed status-quo daily intake (per nutrient).
   daily_intake: Record<string, number>;
 }
+
+// --- Epic 15: Tiered Nutrition Feedback (Confidence Ladder) -------------
+
+// Every day in a range, classified into exactly one bucket (GET
+// /pantry/coverage) — the basis for the "X of Y days tracked" badge and
+// for excluding away/untracked days from a windowed gap calculation.
+export interface DayCoverage {
+  tracked: string[];
+  away: string[];
+  untracked: string[];
+}
+
+export interface PantryCoverageResponse extends DayCoverage {
+  user_id: string;
+  days: number;
+}
+
+// Epic 15.4.1: how far into the Tier-2 -> Tier-3 unlock window this user is.
+export interface TrackingMaturity {
+  tracked_days: number;
+  threshold: number;
+  blend_weight: number; // 0 = no tracked days, 1.0 = threshold met
+}
+
+// Epic 15.3/15.4 (Tiers 1 & 2): GET /nutrition/basket-composition.
+// `source` tells the UI which tier this actually is right now — "basket"
+// (Tier 1, no confirmed data yet), "blend" (Tier 2, partway to the
+// threshold), or "confirmed" (Tier 3 is unlocked, real data only).
+export interface BasketComposition {
+  protein_pct: number | null;
+  fat_pct: number | null;
+  carb_pct: number | null;
+  kcal_total: number | null;
+  source: "basket" | "confirmed" | "blend" | "none";
+  blend_weight: number;
+  tracking: TrackingMaturity;
+  items_considered?: number;
+  events_considered?: number;
+}
+
+export interface BasketCompositionResponse extends BasketComposition {
+  user_id: string;
+}
+
+// Epic 15.6 (Tier 4): one bucket of a rolling trend.
+export interface TrendBucket {
+  bucket_start: string;
+  bucket_end: string;
+  avg_daily_value: number | null;
+  events_considered: number;
+  confidence: ConfidenceLevel;
+}
+
+export interface NutritionTrend {
+  user_id: string;
+  dimension: string;
+  total_days: number;
+  bucket_days: number;
+  // false (with an empty `buckets`) when too little of the window is
+  // actually tracked (Epic 15.6.2) — show "not enough data", not a
+  // distorted trend built from mostly-missing days.
+  has_sufficient_data: boolean;
+  target: number | null;
+  buckets: TrendBucket[];
+}

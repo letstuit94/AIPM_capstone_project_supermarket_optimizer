@@ -1,6 +1,7 @@
+import time
 from uuid import uuid4
 from datetime import date, datetime, timezone
-from typing import Optional
+from typing import Dict, Optional, Tuple
 
 from postgrest.exceptions import APIError
 
@@ -43,10 +44,16 @@ def get_pantry_item(user_id: str, normalized_name: str):
     return next((i for i in items if i["normalized_name"] == normalized_name), None)
 
 
-def upsert_pantry_item_quantity(user_id: str, normalized_name: str, delta: float, unit=None, category=None):
+def upsert_pantry_item_quantity(
+    user_id: str, normalized_name: str, delta: float, unit=None, category=None, replenished_at: Optional[str] = None
+):
     """
     Add `delta` (positive on replenish, negative on consume/remove) to
     the item's running stock, creating the row on first sight.
+
+    `replenished_at`, if given, overrides the replenish timestamp (e.g.
+    a receipt's extracted purchase date) — otherwise it defaults to now.
+    Ignored when delta isn't positive (nothing was replenished).
     """
 
     existing = get_pantry_item(user_id, normalized_name)
@@ -59,7 +66,7 @@ def upsert_pantry_item_quantity(user_id: str, normalized_name: str, delta: float
             "quantity_available": max(delta, 0.0),
             "unit": unit,
             "category": category,
-            "last_replenished_at": _now_iso() if delta > 0 else None,
+            "last_replenished_at": (replenished_at or _now_iso()) if delta > 0 else None,
         }
         try:
             return supabase.table(_PANTRY_ITEMS_TABLE).insert(row).execute()
@@ -72,7 +79,7 @@ def upsert_pantry_item_quantity(user_id: str, normalized_name: str, delta: float
     new_quantity = max(existing["quantity_available"] + delta, 0.0)
     fields = {"quantity_available": new_quantity}
     if delta > 0:
-        fields["last_replenished_at"] = _now_iso()
+        fields["last_replenished_at"] = replenished_at or _now_iso()
 
     try:
         return (
@@ -129,15 +136,40 @@ def insert_consumption_event(
         "consumed_at": consumed_at or _now_iso(),
     }
     try:
-        return supabase.table(_CONSUMPTION_EVENTS_TABLE).insert(row).execute()
+        result = supabase.table(_CONSUMPTION_EVENTS_TABLE).insert(row).execute()
     except APIError as e:
         if e.code not in _MISSING_SCHEMA_CODES:
             raise
         print(f"[db] '{_CONSUMPTION_EVENTS_TABLE}' table missing (migration pending?) — consumption not persisted")
         return None
+    invalidate_consumption_cache(user_id)
+    return result
+
+
+# Epic 15 (15.1/15.5) reads every user's full consumption history far more
+# often than before — day_coverage()/outside_meal_fraction() each call
+# this once per nutrient/day inside a single gap-detection pass (6
+# nutrients × up to a window's worth of days). Without a cache, one
+# /nutrition/snapshot request for a user with a few months of history
+# could issue dozens of redundant full-table fetches in a few hundred
+# milliseconds, which is enough to actually exhaust Supabase's
+# connection pool under real data volume (observed as a genuine
+# "Server disconnected" crash while verifying Epic 15, not a hypothetical
+# concern). Same short-TTL pattern as nutrition_snapshot.py's
+# _snapshot_cache — invalidated on every write below.
+_CONSUMPTION_CACHE_TTL_SECONDS = 5.0
+_consumption_cache: Dict[str, Tuple[float, list]] = {}
+
+
+def invalidate_consumption_cache(user_id: str) -> None:
+    _consumption_cache.pop(user_id, None)
 
 
 def get_consumption_events_by_user(user_id: str):
+    cached = _consumption_cache.get(user_id)
+    if cached is not None and (time.time() - cached[0]) < _CONSUMPTION_CACHE_TTL_SECONDS:
+        return cached[1]
+
     try:
         result = (
             supabase.table(_CONSUMPTION_EVENTS_TABLE)
@@ -151,6 +183,8 @@ def get_consumption_events_by_user(user_id: str):
             raise
         print(f"[db] '{_CONSUMPTION_EVENTS_TABLE}' table missing (migration pending?) — returning no consumption events")
         return []
+
+    _consumption_cache[user_id] = (time.time(), result.data)
     return result.data
 
 

@@ -23,6 +23,9 @@ import type {
   ConsumptionContext,
   ConsumptionFeedbackPayload,
   ConsumptionFeedbackResult,
+  PantryCoverageResponse,
+  BasketCompositionResponse,
+  NutritionTrend,
 } from "@/types/api";
 import { supabase } from "@/lib/supabase";
 import { getStoredLanguage } from "@/lib/i18n";
@@ -448,6 +451,61 @@ export async function submitFeedback(feedback: FeedbackCreate): Promise<Feedback
     body: JSON.stringify(feedback),
   });
   return handle<Feedback>(res);
+}
+
+// --- Epic 15: Tiered Nutrition Feedback (Confidence Ladder) --------------
+
+export async function getPantryCoverage(days = 7): Promise<PantryCoverageResponse> {
+  const res = await fetch(`${API_BASE}/pantry/coverage?days=${days}`, { headers: await authHeader() });
+  return handle<PantryCoverageResponse>(res);
+}
+
+export async function markDayAway(isoDate: string): Promise<{ user_id: string; date: string; away: boolean }> {
+  const res = await fetch(`${API_BASE}/pantry/day/${isoDate}/away`, {
+    method: "POST",
+    headers: await authHeader(),
+  });
+  return handle(res);
+}
+
+export async function unmarkDayAway(isoDate: string): Promise<{ user_id: string; date: string; away: boolean }> {
+  const res = await fetch(`${API_BASE}/pantry/day/${isoDate}/away`, {
+    method: "DELETE",
+    headers: await authHeader(),
+  });
+  return handle(res);
+}
+
+export async function logMealsOutside(
+  count: number,
+  consumedAt?: string,
+): Promise<{ user_id: string; count: number; consumed_at?: string }> {
+  const res = await fetch(`${API_BASE}/pantry/meals-outside`, {
+    method: "POST",
+    headers: await jsonHeaders(),
+    body: JSON.stringify({ count, consumed_at: consumedAt }),
+  });
+  return handle(res);
+}
+
+// Tiers 1 & 2: basket-only or blended-toward-confirmed macro composition —
+// available before Tier 3's health score/gaps unlock.
+export async function getBasketComposition(): Promise<BasketCompositionResponse> {
+  const res = await fetch(`${API_BASE}/nutrition/basket-composition`, { headers: await authHeader() });
+  return handle<BasketCompositionResponse>(res);
+}
+
+// Tier 4: rolling 30/90-day trend for one dimension.
+export async function getNutritionTrend(
+  dimension: string,
+  totalDays = 30,
+  bucketDays = 7,
+  profileId?: string,
+): Promise<NutritionTrend> {
+  const params = new URLSearchParams({ dimension, total_days: String(totalDays), bucket_days: String(bucketDays) });
+  if (profileId) params.set("profile_id", profileId);
+  const res = await fetch(`${API_BASE}/nutrition/trend?${params.toString()}`, { headers: await authHeader() });
+  return handle<NutritionTrend>(res);
 }
 
 // --- Epic 10: Eaten / consumption feedback (A/B) -------------------------

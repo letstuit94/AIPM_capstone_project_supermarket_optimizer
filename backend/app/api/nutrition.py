@@ -5,13 +5,35 @@ from pydantic import ValidationError
 
 from backend.app.services.auth import get_current_user
 from backend.app.services.nutrition_snapshot import build_snapshot_from_db
-from backend.app.services.absolute_gap_detector import detect_absolute_gaps, has_sufficient_data
+from backend.app.services.absolute_gap_detector import detect_absolute_gaps, has_sufficient_data, has_sufficient_trend_data
 from backend.app.services.health_score import compute_health_score
 from backend.app.services.conflict_detector import detect_conflicts
+from backend.app.services.basket_composition import compute_blended_composition
+from backend.app.services.intake_estimator import (
+    estimate_trend,
+    estimate_daily_calories_kcal,
+    estimate_daily_protein_g,
+    estimate_daily_fat_g,
+    estimate_daily_carbs_g,
+    estimate_daily_iron_mg,
+    estimate_daily_calcium_mg,
+)
 from backend.app.db.supabase import get_profile, get_profile_by_user
 from backend.app.models.profile import Profile
 
 router = APIRouter()
+
+# Epic 15.6: dimension name -> the matching intake_estimator function,
+# for /nutrition/trend. Kept here (not in intake_estimator.py) since it's
+# purely an API-layer routing table, not estimation logic.
+_TREND_ESTIMATORS = {
+    "calories": estimate_daily_calories_kcal,
+    "protein": estimate_daily_protein_g,
+    "fat": estimate_daily_fat_g,
+    "carbs": estimate_daily_carbs_g,
+    "iron": estimate_daily_iron_mg,
+    "calcium": estimate_daily_calcium_mg,
+}
 
 
 def _load_profile(profile_id: Optional[str], user_id: str) -> Optional[Profile]:
@@ -183,4 +205,59 @@ def nutrition_analysis(profile_id: Optional[str] = None, user_id: str = Depends(
         **analysis,
         "grouping": grouping,
         "coverage": status_quo.coverage,
+    }
+
+
+@router.get("/nutrition/basket-composition")
+def basket_composition(user_id: str = Depends(get_current_user)):
+    """
+    Epic 15.3/15.4 (Tiers 1 & 2): calorie-weighted protein/fat/carb split,
+    blended from basket-only toward confirmed-consumption-only as tracked
+    days accumulate (see services/basket_composition.py). Available from
+    the very first receipt upload — no confirmed consumption required —
+    which is exactly the point: it fills the pre-Tier-3 gated state
+    instead of an empty placeholder.
+    """
+
+    composition = compute_blended_composition(user_id)
+    return {"user_id": user_id, **composition}
+
+
+@router.get("/nutrition/trend")
+def nutrition_trend(
+    dimension: str,
+    total_days: int = 30,
+    bucket_days: int = 7,
+    profile_id: Optional[str] = None,
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Epic 15.6 (Tier 4): rolling bucket_days-wide averages of `dimension`
+    over the trailing total_days, plus a coverage-floor flag — a month
+    or quarter with too little tracked data returns
+    has_sufficient_data=false instead of a distorted trend.
+    """
+
+    from backend.app.services.ideal_profile import compute_ideal_profile
+
+    estimate_fn = _TREND_ESTIMATORS.get(dimension)
+    if estimate_fn is None:
+        raise HTTPException(status_code=400, detail=f"Unknown trend dimension: {dimension}")
+
+    sufficient = has_sufficient_trend_data(user_id, total_days)
+    buckets = estimate_trend(estimate_fn, user_id, total_days, bucket_days) if sufficient else []
+
+    profile = _load_profile(profile_id, user_id)
+    ideal = compute_ideal_profile(profile) if profile is not None else None
+    target_field = {"calories": "calories_kcal", "protein": "protein_g", "fat": "fat_g", "carbs": "carbs_g"}.get(dimension)
+    target = getattr(ideal, target_field, None) if ideal is not None and target_field else None
+
+    return {
+        "user_id": user_id,
+        "dimension": dimension,
+        "total_days": total_days,
+        "bucket_days": bucket_days,
+        "has_sufficient_data": sufficient,
+        "target": target,
+        "buckets": buckets,
     }

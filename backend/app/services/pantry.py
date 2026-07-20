@@ -25,13 +25,34 @@ from backend.app.services.shelf_life import estimate_expiry, days_until_expiry
 from backend.app.services.fallback_categories import _canonical_category, CATEGORY_NUTRITION
 
 
-def add_items_to_pantry(user_id: str, items: List[dict]) -> None:
+def _replenished_at(purchase_date: Optional[str]) -> Optional[str]:
+    """The receipt's purchase_date ("YYYY-MM-DD"), as a full UTC timestamp
+    so it parses the same way as _now_iso() downstream (shelf_life.py,
+    days_since_last_confirmation). None if the receipt has no legible
+    date — callers then fall back to upload time, the old behavior."""
+
+    if not purchase_date:
+        return None
+    try:
+        d = date.fromisoformat(str(purchase_date)[:10])
+    except ValueError:
+        return None
+    return datetime(d.year, d.month, d.day, tzinfo=timezone.utc).isoformat()
+
+
+def add_items_to_pantry(user_id: str, items: List[dict], purchase_date: Optional[str] = None) -> None:
     """
     Add a freshly-parsed receipt's items to the session's running stock.
 
     `items` uses the same shape as receipt_items rows: normalized_name
     (or name), quantity, unit, category. Items with no name or a
     non-positive quantity are skipped (nothing to stock).
+
+    `purchase_date` (the receipt's extracted date, if any) anchors
+    last_replenished_at on when the shopping actually happened rather
+    than when the receipt was uploaded — matters for shelf_life.py's
+    expiry estimate when a receipt is uploaded days after the purchase.
+    Falls back to upload time when the receipt has no legible date.
 
     Bug fix: this used to store the parser's raw category verbatim (e.g.
     German "Getränke", "Hülsenfrüchte") instead of running it through
@@ -43,6 +64,7 @@ def add_items_to_pantry(user_id: str, items: List[dict]) -> None:
     category never matched their canonical keys.
     """
 
+    replenished_at = _replenished_at(purchase_date)
     for item in items:
         name = item.get("normalized_name") or item.get("name")
         quantity = item.get("quantity")
@@ -54,6 +76,7 @@ def add_items_to_pantry(user_id: str, items: List[dict]) -> None:
             delta=float(quantity),
             unit=item.get("unit"),
             category=_canonical_category(item.get("category"), name),
+            replenished_at=replenished_at,
         )
 
 
@@ -206,8 +229,40 @@ def update_pantry_item_metadata(
     return {**existing, **fields}
 
 
+# Epic 15.5: a reserved pseudo-item name for "I ate N meals outside my
+# tracked pantry today" — logged as an ordinary ConsumptionEvent (no new
+# table, reusing the existing confirmed-consumption machinery per the
+# ToDo1 precedent of "no new mechanism needed"), but explicitly excluded
+# wherever ConsumptionEvents are resolved to real nutrition (see
+# intake_estimator.py, absolute_gap_detector.has_sufficient_data) since
+# it carries no food/nutrient meaning of its own — it only tells
+# day_coverage.py how much of that day's eating had no visibility.
+OUTSIDE_MEAL_SENTINEL = "__ate_out__"
+
+
+def log_meals_outside(user_id: str, count: float, consumed_at: Optional[str] = None) -> None:
+    """Record that `count` meals were eaten outside the tracked pantry on
+    the given day (or today, if `consumed_at` is omitted)."""
+
+    insert_consumption_event(user_id, OUTSIDE_MEAL_SENTINEL, count, consumed_at)
+
+
+def get_meals_outside_count_for_date(user_id: str, log_date: date) -> float:
+    entries = get_consumption_events_by_user_and_date(user_id, log_date)
+    return sum(e["quantity_consumed"] for e in entries if e.get("normalized_name") == OUTSIDE_MEAL_SENTINEL)
+
+
 def get_consumption_events(user_id: str) -> List[dict]:
     return get_consumption_events_by_user(user_id)
+
+
+def get_real_consumption_events(user_id: str) -> List[dict]:
+    """Same as get_consumption_events, minus the outside-meal sentinel —
+    for callers that resolve events to actual nutrition (the sentinel
+    isn't a food and would otherwise pick up a spurious category
+    fallback from the resolver)."""
+
+    return [e for e in get_consumption_events(user_id) if e.get("normalized_name") != OUTSIDE_MEAL_SENTINEL]
 
 
 def get_consumption_log_for_date(user_id: str, log_date: date) -> List[dict]:

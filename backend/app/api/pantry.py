@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -13,11 +13,18 @@ from backend.app.services.pantry import (
     get_consumption_log_for_date,
     update_pantry_item_metadata,
     days_since_last_confirmation,
+    log_meals_outside,
 )
+from backend.app.services.day_coverage import mark_day_away, unmark_day_away, day_coverage
 from backend.app.services.nutrition_mapping import map_item
 from backend.app.models.nutrition import MatchType
 
 router = APIRouter()
+
+
+class MealsOutsideEntry(BaseModel):
+    count: float = Field(gt=0)
+    consumed_at: Optional[str] = None
 
 
 class PantryQuantity(BaseModel):
@@ -167,3 +174,45 @@ def read_food_log(date: date, user_id: str = Depends(get_current_user)):
         "date": date.isoformat(),
         "entries": get_consumption_log_for_date(user_id, date),
     }
+
+
+@router.post("/pantry/day/{log_date}/away")
+def mark_day_away_endpoint(log_date: date, user_id: str = Depends(get_current_user)):
+    """
+    Epic 15.1: mark a day as "away" — travelling, eating out entirely —
+    so windowed gap/trend calculations exclude it from the denominator
+    instead of reading it as a zero-intake failure. Idempotent.
+    """
+
+    mark_day_away(user_id, log_date)
+    return {"user_id": user_id, "date": log_date.isoformat(), "away": True}
+
+
+@router.delete("/pantry/day/{log_date}/away")
+def unmark_day_away_endpoint(log_date: date, user_id: str = Depends(get_current_user)):
+    unmark_day_away(user_id, log_date)
+    return {"user_id": user_id, "date": log_date.isoformat(), "away": False}
+
+
+@router.get("/pantry/coverage")
+def read_day_coverage(days: int = 7, user_id: str = Depends(get_current_user)):
+    """Epic 15.1: which of the trailing `days` days are tracked/away/
+    untracked — backs the "X of Y days tracked" coverage badge."""
+
+    today = date.today()
+    coverage = day_coverage(user_id, today - timedelta(days=days - 1), today)
+    return {"user_id": user_id, "days": days, **coverage}
+
+
+@router.post("/pantry/meals-outside")
+def log_meals_outside_endpoint(body: MealsOutsideEntry, user_id: str = Depends(get_current_user)):
+    """
+    Epic 15.5.2: "I ate N meals outside my tracked pantry today" — logged
+    as an ordinary confirmed-consumption event (a reserved sentinel name,
+    see services/pantry.py's OUTSIDE_MEAL_SENTINEL) so the gap detector
+    can shrink that day's target instead of reading the missing meals as
+    a deficit, without a second consumption-logging mechanism.
+    """
+
+    log_meals_outside(user_id, body.count, body.consumed_at)
+    return {"user_id": user_id, "count": body.count, "consumed_at": body.consumed_at}

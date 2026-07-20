@@ -84,7 +84,7 @@ const STRINGS: Record<string, { en: string; de: string }> = {
   // lives inside Pantry itself.
   "nav.userProfile": { en: "My Profile", de: "Nutzerprofil" },
   "nav.pantry": { en: "My Pantry", de: "Vorrat" },
-  "nav.results": { en: "Insights", de: "Analyse" },
+  "nav.results": { en: "Dashboard", de: "Dashboard" },
   "nav.diary": { en: "My Day", de: "Tag" },
   "nav.notifications": { en: "Notifications", de: "Mitteilungen" },
   "footer.tagline": {
@@ -222,8 +222,8 @@ const STRINGS: Record<string, { en: string; de: string }> = {
   },
   "analysis.onTarget": { en: "On target — no notable gaps.", de: "Im Zielbereich — keine nennenswerten Lücken." },
   "analysis.microsGated": {
-    en: "Score is based on calories & macros. Micronutrients are shown but not yet scored (pending dietitian sign-off).",
-    de: "Der Score basiert auf Kalorien & Makros. Mikronährstoffe werden angezeigt, aber noch nicht bewertet (vorbehaltlich diätologischer Freigabe).",
+    en: "Score is based on calories & macros. Micronutrients aren't included yet (pending dietitian sign-off).",
+    de: "Der Score basiert auf Kalorien & Makros. Mikronährstoffe sind noch nicht enthalten (vorbehaltlich diätologischer Freigabe).",
   },
   "analysis.macros": { en: "Calories & macros", de: "Kalorien & Makros" },
   "analysis.micros": { en: "Micronutrients (not scored yet)", de: "Mikronährstoffe (noch nicht bewertet)" },
@@ -448,7 +448,7 @@ const STRINGS: Record<string, { en: string; de: string }> = {
   // Results step — now also the merged "Overview"/home page (formerly
   // DashboardStep.tsx's mockup): greeting, inactivity reminder, and the
   // trend/recipe cards promoted out of the details-only section below.
-  "results.step": { en: "Overview", de: "Übersicht" },
+  "results.step": { en: "Dashboard", de: "Dashboard" },
   "results.title": { en: "Your basket, aggregated.", de: "Dein Einkaufskorb, zusammengefasst." },
   "results.body": {
     en: "Combines every receipt you've uploaded so far — not just the last one.",
@@ -475,8 +475,8 @@ const STRINGS: Record<string, { en: string; de: string }> = {
   },
   "results.reminderCta": { en: "Confirm now", de: "Jetzt bestätigen" },
   "results.noDataNotice": {
-    en: "No data yet — upload your first receipt to see your Insights.",
-    de: "Noch keine Daten — lade deinen ersten Kassenbon hoch, um deine Insights zu sehen.",
+    en: "No data yet — upload your first receipt to see your Dashboard.",
+    de: "Noch keine Daten — lade deinen ersten Kassenbon hoch, um dein Dashboard zu sehen.",
   },
   "results.noDataCta": { en: "Upload a receipt", de: "Kassenbon hochladen" },
   "results.noDataPlaceholderCoach": {
@@ -550,7 +550,7 @@ const STRINGS: Record<string, { en: string; de: string }> = {
   },
   "results.pantryRecipes": { en: "Recipes from your pantry", de: "Rezepte aus deinem Lager" },
   "results.logInDiary": { en: "Log in Diary →", de: "Im Tagebuch eintragen →" },
-  "results.viewInsights": { en: "View Insights →", de: "Insights ansehen →" },
+  "results.viewInsights": { en: "View Dashboard →", de: "Dashboard ansehen →" },
   "results.healthScore": { en: "Health score", de: "Health Score" },
   "results.healthScore.great": { en: "great", de: "sehr gut" },
   "results.healthScore.good": { en: "good", de: "gut" },
@@ -651,6 +651,67 @@ const STRINGS: Record<string, { en: string; de: string }> = {
   },
   "diary.manualLogNamePlaceholder": { en: "What did you eat?", de: "Was hast du gegessen?" },
   "diary.manualLogAdd": { en: "Add", de: "Hinzufügen" },
+
+  // Epic 15 — Tiered Nutrition Feedback (Confidence Ladder)
+  "coverage.badge": { en: "{tracked} of {days} days tracked", de: "{tracked} von {days} Tagen erfasst" },
+  "diary.away": { en: "I was away today", de: "Ich war heute nicht zuhause" },
+  "diary.awayUndo": { en: "Actually, I was here", de: "Doch, ich war da" },
+  "diary.awaySet": { en: "Marked as away — this day won't count against your targets.", de: "Als abwesend markiert — dieser Tag zählt nicht gegen deine Ziele." },
+  "diary.awayExplainer": {
+    en: "Travelling, or ate out for every meal? Mark the day away instead of logging — we'll leave it out of your targets rather than reading it as a deficit.",
+    de: "Auf Reisen oder jede Mahlzeit auswärts gegessen? Markiere den Tag als abwesend statt zu loggen — er zählt dann nicht als Defizit.",
+  },
+  "diary.ateOutTitle": { en: "Ate out today?", de: "Heute auswärts gegessen?" },
+  "diary.ateOutBody": {
+    en: "Meals we can't see aren't counted against you — tap for each one that wasn't from your pantry.",
+    de: "Mahlzeiten, die wir nicht sehen, zählen nicht gegen dich — tippe für jede, die nicht aus deinem Lager war.",
+  },
+  "diary.ateOutButton": { en: "+ 1 meal eaten out", de: "+ 1 auswärts gegessene Mahlzeit" },
+  "diary.ateOutLogged": { en: "{count} meal(s) eaten out today, noted.", de: "{count} auswärts gegessene Mahlzeit(en) heute notiert." },
+  "diary.ateOutEntry": { en: "Ate out ({count})", de: "Auswärts gegessen ({count})" },
+
+  "basket.title": { en: "Your basket", de: "Dein Warenkorb" },
+  "basket.titleBlend": { en: "Your basket, meeting your logs", de: "Dein Warenkorb, trifft deine Einträge" },
+  "basket.titleConfirmed": { en: "Your week, confirmed", de: "Deine Woche, bestätigt" },
+  "basket.disclaimerBasket": {
+    en: "Based on what you've bought, not confirmed eaten yet — this updates as you log real meals in your Diary.",
+    de: "Basierend auf dem, was du gekauft hast, noch nicht als gegessen bestätigt — aktualisiert sich, sobald du echte Mahlzeiten im Tagebuch loggst.",
+  },
+  "basket.disclaimerBlend": {
+    en: "A mix of your basket and what you've confirmed eating so far — shifting toward confirmed data as you keep logging.",
+    de: "Eine Mischung aus deinem Warenkorb und dem, was du bisher bestätigt hast — verschiebt sich hin zu bestätigten Daten, je mehr du loggst.",
+  },
+  "basket.disclaimerConfirmed": {
+    en: "Based on what you've confirmed eating this week.",
+    de: "Basierend auf dem, was du diese Woche bestätigt gegessen hast.",
+  },
+  "basket.protein": { en: "Protein", de: "Protein" },
+  "basket.fat": { en: "Fat", de: "Fett" },
+  "basket.carbs": { en: "Carbs", de: "Kohlenhydrate" },
+  "basket.empty": { en: "Upload a receipt to see your basket's macro split.", de: "Lade einen Kassenbon hoch, um die Makro-Verteilung deines Warenkorbs zu sehen." },
+  "basket.earlySignalTitle": { en: "Early signal", de: "Erstes Signal" },
+  "basket.unlockProgress": {
+    en: "Log {remaining} more day(s) in your Diary to unlock your health score, nutrient gaps and personalized recommendations.",
+    de: "Logge {remaining} weitere(n) Tag(e) im Tagebuch, um Health Score, Nährstoff-Lücken und persönliche Empfehlungen freizuschalten.",
+  },
+
+  "trend.title": { en: "Trend", de: "Trend" },
+  "trend.window7": { en: "7 days", de: "7 Tage" },
+  "trend.window30": { en: "30 days", de: "30 Tage" },
+  "trend.window90": { en: "90 days", de: "90 Tage" },
+  "trend.insufficientData": {
+    en: "Not enough tracked days in this window yet to show a reliable trend.",
+    de: "In diesem Zeitraum noch nicht genug erfasste Tage für einen verlässlichen Trend.",
+  },
+  "trend.target": { en: "target", de: "Ziel" },
+  "trend.closenessIntro": {
+    en: "Each line shows how close you are to your ideal profile for that nutrient — 100% (dashed) means fully met.",
+    de: "Jede Linie zeigt, wie nah du an deinem Idealprofil für diesen Nährstoff bist — 100% (gestrichelt) bedeutet vollständig erreicht.",
+  },
+  "trend.legendNote": {
+    en: "Percentages next to each nutrient are your most recently tracked period, as % of its personal target.",
+    de: "Die Prozentwerte je Nährstoff zeigen deinen zuletzt erfassten Zeitraum, als % deines persönlichen Ziels.",
+  },
 };
 
 export function t(key: string, lang: Lang): string {

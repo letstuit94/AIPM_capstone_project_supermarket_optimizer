@@ -11,6 +11,8 @@ import {
   getAnalysis,
   getRecommendations,
   getReceiptUploadProgress,
+  getBasketComposition,
+  getNutritionTrend,
   submitFeedback,
   ApiError,
 } from "@/lib/api";
@@ -19,8 +21,12 @@ import { NextCartCard as StructuredNextCartCard } from "@/steps/NextCartCard";
 import { Level2Card } from "@/steps/Level2Card";
 import { EatenFeedbackCard } from "@/steps/EatenFeedbackCard";
 import { TargetsCard } from "@/components/TargetsCard";
+import { BasketCompositionCard } from "@/components/BasketCompositionCard";
+import { MultiTrendChart } from "@/components/TrendChart";
+import type { TrendSeries } from "@/components/TrendChart";
 import type {
   AbsoluteGap,
+  BasketComposition,
   Conflict,
   DimensionSnapshot,
   FeedbackResponseValue,
@@ -30,6 +36,7 @@ import type {
   NextCartRecommendation,
   NutritionSnapshot,
   NutritionAnalysis,
+  NutritionTrend,
   ReceiptUploadProgress,
   StructuredNextCart,
   ProgressReport,
@@ -489,6 +496,68 @@ function GatedGapsCard({
   );
 }
 
+// Epic 15.6 (Tier 4), redesigned: every tracked macro plotted together as
+// % of its own target, so the chart doubles as "how close to my ideal
+// profile" (the whole point of Tier 4) rather than one dimension at a
+// time behind a toggle. Tier 3's weekly view (health score/gaps above)
+// already covers 7 days, so this starts at 30 by default.
+const TREND_WINDOWS = [7, 30, 90] as const;
+const TREND_SERIES_CONFIG = [
+  { dimension: "calories", stroke: "stroke-ink", dot: "fill-ink" },
+  { dimension: "protein", stroke: "stroke-blue-600", dot: "fill-blue-600" },
+  { dimension: "fat", stroke: "stroke-orange-500", dot: "fill-orange-500" },
+  { dimension: "carbs", stroke: "stroke-teal-600", dot: "fill-teal-600" },
+] as const;
+
+function TrendCard({
+  trends,
+  loading,
+  window,
+  onWindowChange,
+}: {
+  trends: Record<string, NutritionTrend | null>;
+  loading: boolean;
+  window: number;
+  onWindowChange: (w: number) => void;
+}) {
+  const { t, language } = useLanguage();
+
+  const series: TrendSeries[] = TREND_SERIES_CONFIG.map((c) => ({
+    ...c,
+    label: nutrientLabel(c.dimension, language),
+    trend: trends[c.dimension] ?? null,
+  }));
+
+  return (
+    <Card className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SectionLabel>{t("trend.title")}</SectionLabel>
+        <div className="flex gap-1 rounded-full bg-zinc-100 p-1">
+          {TREND_WINDOWS.map((w) => (
+            <button
+              key={w}
+              type="button"
+              onClick={() => onWindowChange(w)}
+              className={cn(
+                "rounded-full px-2.5 py-1 text-[11px] font-medium tracking-tight transition-colors",
+                window === w ? "bg-ink text-canvas" : "text-ink/55 hover:text-ink",
+              )}
+            >
+              {t(`trend.window${w}`)}
+            </button>
+          ))}
+        </div>
+      </div>
+      <p className="text-xs text-ink/45">{t("trend.closenessIntro")}</p>
+      {loading ? (
+        <p className="text-sm text-ink/50">{t("results.loading")}</p>
+      ) : (
+        <MultiTrendChart series={series} />
+      )}
+    </Card>
+  );
+}
+
 const FEEDBACK_OPTIONS: readonly FeedbackResponseValue[] = ["yes", "maybe", "no"];
 
 function FeedbackWidget({ recommendationId }: { recommendationId: string }) {
@@ -603,6 +672,15 @@ export function ResultsStep({
   // the gated render branch below.
   const [idealProfile, setIdealProfile] = useState<IdealProfile | null>(null);
   const [itemProgress, setItemProgress] = useState<ReceiptUploadProgress | null>(null);
+  // Epic 15.3/15.4 (Tiers 1 & 2): fetched independent of the upload gate
+  // below — it's meant to fill exactly the gated pre-Tier-3 state.
+  const [basketComposition, setBasketComposition] = useState<BasketComposition | null>(null);
+  // Epic 15.6 (Tier 4): fetched lazily once Details is opened — one
+  // trend per tracked macro, keyed by dimension, so the chart can plot
+  // all of them together instead of one at a time.
+  const [trends, setTrends] = useState<Record<string, NutritionTrend | null>>({});
+  const [trendLoading, setTrendLoading] = useState(false);
+  const [trendWindow, setTrendWindow] = useState<number>(30);
   // Epic 14.1: collapsed by default so the page reads as a short "here's
   // where you stand" summary first, not a wall of cards.
   const [showDetails, setShowDetails] = useState(false);
@@ -620,14 +698,20 @@ export function ResultsStep({
     // shouldn't break the rest of the page — profile falls back to the
     // name-less greeting, and a failed progress check just skips the gate
     // (fails open to the normal page) rather than getting stuck greyed out.
-    const [profileResult, progressResult] = await Promise.allSettled([
+    const [profileResult, progressResult, basketResult] = await Promise.allSettled([
       profileId ? getProfile(profileId) : Promise.resolve(null),
       getReceiptUploadProgress(),
+      // Epic 15.3/15.4: fetched unconditionally, independent of the
+      // upload gate below — this is exactly what fills that gated state
+      // instead of an empty placeholder, and best-effort (a 409 with no
+      // receipts yet just means nothing to show, not a page error).
+      getBasketComposition(),
     ]);
     const profile = profileResult.status === "fulfilled" ? profileResult.value : null;
     const progress = progressResult.status === "fulfilled" ? progressResult.value : null;
     setIdealProfile(profile?.ideal_profile ?? null);
     setItemProgress(progress);
+    setBasketComposition(basketResult.status === "fulfilled" ? basketResult.value : null);
     if (profile) {
       setProfileName(profile.name ?? null);
       // E9 / R-L2TRIG: only invite when the user hasn't decided consent
@@ -640,6 +724,26 @@ export function ResultsStep({
     // too little data to mean anything — show only the calculated targets
     // + a greyed-out progress indicator instead of fetching any of it.
     if (progress && !progress.complete) {
+      setSnapshot(null);
+      setAnalysis(null);
+      setStructuredCart(null);
+      setRecommendation(null);
+      setDaysSinceLastConfirmation(null);
+      setLoading(false);
+      return;
+    }
+
+    // Confidence-ladder gate (Tiers 1/2 -> Tier 3): the health score, gap
+    // list, next-cart recommendation and coach message are all built from
+    // confirmed consumption — with none yet (or only a partial week),
+    // fetching them would be both misleading (a "score" with nothing real
+    // behind it) and wasteful (each of those 4 endpoints independently
+    // re-resolves every receipt item's nutrition; skipping them here is a
+    // real load-time win for exactly the accounts that would otherwise
+    // wait longest for content they won't see). Only basket composition
+    // (already fetched above) is shown until a full tracked week exists.
+    const basket = basketResult.status === "fulfilled" ? basketResult.value : null;
+    if (basket?.source !== "confirmed") {
       setSnapshot(null);
       setAnalysis(null);
       setStructuredCart(null);
@@ -690,6 +794,28 @@ export function ResultsStep({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profileId, language]);
 
+  // Epic 15.6: lazy — only fetched once Details is opened, and re-fetched
+  // whenever the selected window changes. All 4 tracked macros fetched in
+  // parallel (not sequentially) — they share the same window/offset, so
+  // the backend's per-window nutrition-resolution cache (intake_estimator.py)
+  // collapses this into one real resolution pass either way.
+  useEffect(() => {
+    if (!showDetails) return;
+    let cancelled = false;
+    setTrendLoading(true);
+    Promise.all(
+      TREND_SERIES_CONFIG.map((c) =>
+        getNutritionTrend(c.dimension, trendWindow, 7, profileId ?? undefined).catch(() => null),
+      ),
+    ).then((results) => {
+      if (cancelled) return;
+      const byDimension: Record<string, NutritionTrend | null> = {};
+      TREND_SERIES_CONFIG.forEach((c, i) => { byDimension[c.dimension] = results[i]; });
+      setTrends(byDimension);
+    }).finally(() => { if (!cancelled) setTrendLoading(false); });
+    return () => { cancelled = true; };
+  }, [showDetails, trendWindow, profileId]);
+
   const greeting = profileName
     ? `Hi ${profileName} 👋`
     : `${t("results.greetingFallback")} 👋`;
@@ -698,6 +824,18 @@ export function ResultsStep({
   // calculated targets + a greyed-out progress placeholder instead of the
   // full analysis (which `load()` didn't even fetch in this state).
   const gated = itemProgress !== null && !itemProgress.complete;
+  // Confidence-ladder gate (Tiers 1/2 -> Tier 3): the full health-score/
+  // gap/next-cart page only makes sense once a full tracked week of
+  // confirmed consumption exists — until then, show composition only
+  // (BasketCompositionCard's own "source" already covers Tier 1 basket-
+  // only vs. Tier 2 blend, so this is a single flag, not two).
+  const fullyUnlocked = basketComposition?.source === "confirmed";
+
+  // Not ready to surface micronutrients yet (iron/calcium are minerals,
+  // tracked server-side for the health score but not displayed here).
+  const visibleAbsoluteGaps = (snapshot?.absolute_gaps ?? []).filter(
+    (g) => g.dimension !== "iron" && g.dimension !== "calcium",
+  );
 
   return (
     <section className="space-y-8 px-6 pb-16">
@@ -762,11 +900,29 @@ export function ResultsStep({
       {!loading && gated && itemProgress ? (
         <>
           <TargetsCard ideal={idealProfile} />
+          {/* Epic 15.3 (Tier 1): fills this otherwise-empty gated state
+              with real content from day one — cart composition, not a
+              consumption claim, so it doesn't need the 50-item gate. */}
+          <BasketCompositionCard composition={basketComposition} />
           <GatedGapsCard progress={itemProgress} onNavigate={onNavigate} />
         </>
       ) : null}
 
-      {!loading && !gated ? (
+      {/* Confidence-ladder gate: past the 50-item upload gate but before a
+          full tracked week exists (Tiers 1/2), show composition only —
+          the health score, gap list and recommendations below are all
+          built from confirmed consumption, and showing them (or even a
+          "not enough data" placeholder for each) before there's a real
+          week of it just adds noise around the one thing that IS ready:
+          what's actually in the basket. */}
+      {!loading && !gated && !fullyUnlocked ? (
+        <>
+          <TargetsCard ideal={idealProfile} />
+          <BasketCompositionCard composition={basketComposition} />
+        </>
+      ) : null}
+
+      {!loading && !gated && fullyUnlocked ? (
         <>
       {/* Promoted from DashboardStep.tsx's mockup: the inactivity nudge
           now lives on the merged home page, pointing at the Diary
@@ -902,6 +1058,13 @@ export function ResultsStep({
 
       {snapshot ? <HealthScoreCard score={snapshot.health_score} /> : null}
 
+      {/* Epic 15.3/15.4 (Tiers 1 & 2): stays visible once Tier 3 is
+          unlocked too — `source`/`blend_weight` naturally settle to
+          "confirmed" as real logging accumulates, so this becomes a
+          macro-composition companion to the gap cards below rather than
+          a separate thing to remove. */}
+      <BasketCompositionCard composition={basketComposition} />
+
       {/* Menu restructure: the "use what you already have" pantry-match
           pick moved to the Pantry ("My Pantry") page — it's about your
           stock, not the nutrition analysis this page is for. See
@@ -981,11 +1144,13 @@ export function ResultsStep({
                 ) : null}
               </Card>
 
-              {/* Epic 14.2: density gaps + absolute gaps in one combined list. */}
-              {snapshot.gaps.length > 0 || snapshot.absolute_gaps.length > 0 ? (
+              {/* Epic 14.2: density gaps + absolute gaps in one combined list.
+                  Micronutrients (iron, calcium) filtered out for now — not
+                  ready to surface yet, macros/calories only. */}
+              {snapshot.gaps.length > 0 || visibleAbsoluteGaps.length > 0 ? (
                 <div className="space-y-4">
                   <SectionLabel>{t("results.nutrientStatus")}</SectionLabel>
-                  <NutrientStatusList gaps={snapshot.gaps} absoluteGaps={snapshot.absolute_gaps} />
+                  <NutrientStatusList gaps={snapshot.gaps} absoluteGaps={visibleAbsoluteGaps} />
                 </div>
               ) : (
                 <div className="rounded-2xl bg-zinc-50 px-5 py-4 text-xs text-ink/50 ring-1 ring-black/5">
@@ -994,6 +1159,14 @@ export function ResultsStep({
                     : t("results.absoluteGapsNoData")}
                 </div>
               )}
+
+              {/* Epic 15.6 (Tier 4): 30/90-day trend, coverage-floor gated. */}
+              <TrendCard
+                trends={trends}
+                loading={trendLoading}
+                window={trendWindow}
+                onWindowChange={setTrendWindow}
+              />
             </>
           ) : null}
         </>

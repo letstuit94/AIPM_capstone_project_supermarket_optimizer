@@ -5,9 +5,10 @@ recommender.py's Lager-first logic.
 
 Deliberately approximate, same spirit as fallback_categories.py's
 per-category nutrition estimates: a single category-average shelf life
-in days, not a per-product lookup. No new data source needed — anchored
-on PantryItem.last_replenished_at (already recorded on every pantry
-add/restock), not a receipt's actual purchase date.
+in days, not a per-product lookup. Anchored on
+PantryItem.last_replenished_at, which services/pantry.py sets from the
+receipt's extracted purchase date when legible, falling back to upload
+time otherwise.
 """
 
 from datetime import datetime, timedelta, timezone
